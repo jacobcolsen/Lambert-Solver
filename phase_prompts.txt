@@ -1,0 +1,116 @@
+LAMBERT SOLVER — PHASE PROMPTS
+================================
+Copy and paste each prompt to start the corresponding phase.
+
+
+PHASE 1 — Canvas Foundation
+-----------------------------
+We are building an interactive Lambert solver as a single self-contained HTML file.
+Start Phase 1: Canvas Foundation.
+
+Create the HTML file `lambert_solver.html` with:
+- An HTML5 Canvas centered on Earth (blue circle, ~6371km radius scaled appropriately)
+- A coordinate system in km, with zoom (scroll wheel) and pan (click+drag)
+- A function to draw an orbit given semi-major axis (a), eccentricity (e), argument of periapsis (ω) as an ellipse
+- Two satellites (colored dots) placed at specific true anomaly positions on two different circular orbits (e.g. 400km and 20000km altitude)
+- A right-side panel with placeholder sections for: Orbit Parameters, ΔV Budget, Math Walkthrough, ΔV vs ToF Chart
+- A bottom slider placeholder labeled "Time of Flight"
+- Clean, modern dark-theme UI
+
+No Lambert solving yet — just the visual foundation. Make it look polished.
+
+
+PHASE 2 — Lambert Solver Core
+-------------------------------
+We are building an interactive Lambert solver as a single self-contained HTML file.
+Phase 1 (canvas, orbits, satellite placement, UI shell) is complete in `lambert_solver.html`.
+
+Start Phase 2: Lambert Solver Core.
+
+Add to the existing file:
+- A JavaScript implementation of the universal-variable Lambert algorithm
+  - Inputs: r1 (vec2), r2 (vec2), ToF (seconds), mu (Earth GM = 3.986e14)
+  - Outputs: v1 (vec2), v2 (vec2)
+  - Use Bate/Mueller/White universal variable formulation with Stumpff functions C(z), S(z)
+  - Newton-Raphson iteration to convergence (tolerance 1e-6, max 50 iterations)
+  - Prograde only (short-way transfer)
+- A validation test: when satellite 1 is on a 400km circular orbit and satellite 2 is on a 20000km circular orbit at the Hohmann transfer arrival point, the Lambert solution should match the Hohmann ΔV values analytically
+- Display the validation result (computed vs analytical ΔV) visibly on screen as a debug panel
+
+Do not change the visual layout from Phase 1. Just wire in the math engine and show the validation.
+
+
+PHASE 3 — Transfer Visualization
+----------------------------------
+We are building an interactive Lambert solver as a single self-contained HTML file.
+Phases 1 (canvas/UI) and 2 (Lambert solver core, validated against Hohmann) are complete in `lambert_solver.html`.
+
+Start Phase 3: Transfer Visualization.
+
+Add to the existing file:
+- Derive the transfer orbit elements (a, e, ω) from the Lambert output vectors v1, v2 and positions r1, r2
+- Draw the transfer ellipse on the canvas in a distinct color (e.g. gold/yellow)
+- Draw ΔV vectors as scaled arrows at the departure point (Δv1 = v_transfer_departure - v_sat1) and arrival point (Δv2 = v_transfer_arrival - v_sat2), color-coded
+- Draw velocity vectors at departure: v_sat1 (blue), v_transfer_departure (gold), and show Δv1 = difference
+- Populate the Orbit Parameters panel with a table showing semi-major axis, eccentricity, period, and inclination for: Departure orbit, Transfer orbit, Arrival orbit
+- Populate the ΔV Budget panel with: Δv1, Δv2, total ΔV (in m/s)
+
+Test that the transfer ellipse is geometrically correct and the ΔV arrows point in sensible directions.
+
+
+PHASE 4 — Interactivity
+-------------------------
+We are building an interactive Lambert solver as a single self-contained HTML file.
+Phases 1-3 are complete in `lambert_solver.html`. The Lambert solver works, the transfer ellipse draws correctly, ΔV vectors and orbit parameters display correctly.
+
+Start Phase 4: Interactivity.
+
+Add to the existing file:
+- Make both satellites draggable: the user can click and drag each satellite and it snaps to its orbit (constraining to the correct orbital radius). On mouse release, recompute the Lambert solution and redraw everything.
+- Wire up the Time-of-Flight slider (range: ~0.1x to 4x Hohmann transfer time, displayed in hours): dragging it live-recomputes and redraws the transfer ellipse, ΔV vectors, and all panels
+- Handle solver edge cases gracefully (180° transfer, very short ToF, non-convergence) — show a warning message on screen rather than crashing
+- The ΔV Budget panel and Orbit Parameters panel must update in real-time as the user drags
+
+Test: drag satellite to opposite side of orbit, adjust ToF slider across full range — everything should update smoothly without errors.
+
+
+PHASE 5 — Math & Education Panels
+-----------------------------------
+We are building an interactive Lambert solver as a single self-contained HTML file.
+Phases 1-4 are complete in `lambert_solver.html`. The solver is interactive, draggable, and updates live.
+
+Start Phase 5: Math & Education Panels.
+
+Add to the existing file:
+- A collapsible "Math Walkthrough" panel that shows each step of the Lambert solution:
+  1. Inputs: |r1|, |r2|, Δθ, ToF
+  2. Compute chord length c, semi-perimeter s
+  3. Each Newton-Raphson iteration: show z, C(z), S(z), y(z), and the function value F(z) converging to zero
+  4. Final: t*, A, Lagrange coefficients f, g, ḟ, ġ
+  5. Output v1, v2
+  - Values should update each time the solver runs
+- Detect when the solution is (approximately) a Hohmann transfer (circular coplanar orbits, transfer angle = 180°) and show a highlighted callout: "This is a Hohmann Transfer — the minimum-energy solution for these orbits"
+- Add tooltips: hovering over key variable names (z, C(z), S(z), f, g, Δv1, Δv2) shows a small popup explaining what the variable means physically
+- Add a ΔV vs ToF chart (use Canvas or inline SVG): x-axis = ToF (hours), y-axis = total ΔV (m/s), with a moving dot showing the current ToF. Recompute the curve when orbit positions change.
+
+Test: verify all math panel values match the actual computed outputs. Verify the ΔV vs ToF curve shape makes physical sense (U-shaped with minimum near Hohmann time).
+
+
+PHASE 6 — Animation & Polish
+------------------------------
+We are building an interactive Lambert solver as a single self-contained HTML file.
+Phases 1-5 are complete in `lambert_solver.html`. All math, interactivity, and education panels are working.
+
+Start Phase 6: Animation & Polish.
+
+Add to the existing file:
+- An "Animate Transfer" button: when clicked, a spacecraft icon travels along the transfer ellipse from r1 to r2, with timing proportional to the actual ToF (speed up by a scale factor so it completes in ~4 seconds real time). Show elapsed mission time ticking up during animation.
+- During animation, show a "burn indicator" flash at departure and arrival moments
+- Smooth transitions: when the user drags a satellite or adjusts ToF, use a brief tween (100-150ms) so the transfer ellipse doesn't jump abruptly
+- Add orbit labels directly on the canvas: "Departure Orbit", "Transfer Orbit", "Arrival Orbit"
+- Add a legend for all colored elements
+- Add a "Reset to Hohmann" button that snaps satellites to the canonical Hohmann positions
+- Final UI polish: consistent font, spacing, color scheme, panel borders, responsive layout
+- Remove the Phase 2 debug/validation panel (keep the validation logic in comments)
+
+Final test: full end-to-end — drag satellites, adjust ToF, watch animation, read math panel, check ΔV curve. Everything should feel cohesive and educational.

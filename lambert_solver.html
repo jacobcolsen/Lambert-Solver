@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lambert Solver — Interactive Orbital Mechanics</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:           #080818;
+            --panel-bg:     #0c0c22;
+            --panel-bg2:    #0f0f28;
+            --border:       #1a2540;
+            --border-bright:#2a3a60;
+            --sat-a:        #00d4ff;
+            --sat-b:        #ff8c42;
+            --transfer:     #ffd700;
+            --text:         #b8c8e0;
+            --text-dim:     #4a6080;
+            --text-bright:  #e0ecff;
+            --green:        #4aed88;
+            --red:          #ff4a6a;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Courier New', 'Courier', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* ── Header ── */
+        #header {
+            height: 48px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 24px;
+            flex-shrink: 0;
+        }
+
+        #header h1 {
+            font-size: 15px;
+            color: var(--text-bright);
+            letter-spacing: 3px;
+            font-weight: normal;
+        }
+
+        #header .badge {
+            font-size: 10px;
+            color: var(--sat-a);
+            border: 1px solid var(--sat-a);
+            padding: 2px 8px;
+            border-radius: 2px;
+            letter-spacing: 1px;
+            opacity: 0.7;
+        }
+
+        #header .subtitle {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: auto;
+            letter-spacing: 1px;
+        }
+
+        /* ── Main layout ── */
+        #main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Canvas area ── */
+        #canvas-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        #mainCanvas {
+            display: block;
+            cursor: grab;
+        }
+
+        #mainCanvas.panning { cursor: grabbing; }
+
+        /* Canvas overlays */
+        #canvas-overlay {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            pointer-events: none;
+        }
+
+        #canvas-overlay .ov-row {
+            font-size: 10px;
+            color: var(--text-dim);
+            line-height: 1.8;
+            letter-spacing: 1px;
+        }
+
+        #canvas-overlay .ov-val {
+            color: var(--text);
+        }
+
+        #hint-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            font-size: 10px;
+            color: var(--text-dim);
+            pointer-events: none;
+            letter-spacing: 1px;
+        }
+
+        #hint-overlay div { line-height: 1.9; }
+
+        /* ── Side panel ── */
+        #side-panel {
+            width: 340px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel {
+            border-bottom: 1px solid var(--border);
+            padding: 14px 16px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .panel-title {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+        }
+
+        .panel-tag {
+            font-size: 9px;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            padding: 1px 6px;
+            border-radius: 2px;
+            letter-spacing: 1px;
+        }
+
+        /* ── Orbit Parameters table ── */
+        .orbit-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .orbit-table th {
+            font-size: 9px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            padding: 3px 6px;
+            text-align: right;
+            border-bottom: 1px solid var(--border);
+            font-weight: normal;
+        }
+
+        .orbit-table th:first-child { text-align: left; }
+
+        .orbit-table td {
+            padding: 7px 6px;
+            text-align: right;
+            color: var(--text);
+            border-bottom: 1px solid rgba(26,37,64,0.6);
+            font-size: 12px;
+        }
+
+        .orbit-table td:first-child { text-align: left; font-size: 11px; letter-spacing: 1px; }
+        .orbit-table tr.row-dep  td:first-child { color: var(--sat-a); }
+        .orbit-table tr.row-xfer td:first-child { color: var(--transfer); opacity: 0.6; }
+        .orbit-table tr.row-arr  td:first-child { color: var(--sat-b); }
+        .orbit-table .pending { color: var(--text-dim); font-style: italic; font-size: 11px; }
+
+        /* ── ΔV Budget ── */
+        .dv-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(26,37,64,0.6);
+        }
+
+        .dv-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .dv-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+
+        .dv-val {
+            font-size: 13px;
+            color: var(--text-bright);
+        }
+
+        .dv-val.total-val {
+            color: var(--green);
+            font-size: 15px;
+        }
+
+        .pending-val {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* ── Math Walkthrough ── */
+        .expand-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 2px 10px;
+            font-size: 9px;
+            border-radius: 2px;
+            letter-spacing: 1.5px;
+            font-family: inherit;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .expand-btn:hover {
+            border-color: var(--sat-a);
+            color: var(--sat-a);
+        }
+
+        .math-body {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.75;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 10px;
+        }
+
+        .math-step {
+            margin-bottom: 6px;
+            padding-left: 10px;
+            border-left: 2px solid var(--border);
+        }
+
+        .math-step .step-label {
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+
+        .math-step .step-content {
+            color: var(--text);
+            font-size: 11px;
+        }
+
+        .math-pending {
+            font-style: italic;
+            color: var(--text-dim);
+            font-size: 11px;
+        }
+
+        /* ── ΔV vs ToF Chart ── */
+        #dv-tof-canvas {
+            width: 100%;
+            height: 130px;
+            display: block;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+        }
+
+        .chart-note {
+            font-size: 9px;
+            color: var(--text-dim);
+            text-align: center;
+            margin-top: 5px;
+            letter-spacing: 1px;
+        }
+
+        /* ── Legend ── */
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .legend-line {
+            width: 24px;
+            height: 2px;
+            flex-shrink: 0;
+        }
+
+        /* ── Bottom bar (ToF slider) ── */
+        #bottom-bar {
+            height: 68px;
+            background: var(--panel-bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 18px;
+            flex-shrink: 0;
+        }
+
+        .tof-info {
+            flex-shrink: 0;
+            min-width: 170px;
+        }
+
+        .tof-title {
+            font-size: 9px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            margin-bottom: 3px;
+        }
+
+        .tof-value {
+            font-size: 18px;
+            color: var(--text-bright);
+            letter-spacing: 1px;
+        }
+
+        .tof-value .tof-unit {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: 4px;
+        }
+
+        #tof-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #tof-slider:not([disabled]) {
+            opacity: 1;
+            cursor: pointer;
+        }
+
+        #tof-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--sat-a);
+            cursor: pointer;
+        }
+
+        #tof-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--sat-a);
+            border: none;
+            cursor: pointer;
+        }
+
+        .bar-buttons {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .bar-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 5px 12px;
+            font-size: 9px;
+            cursor: pointer;
+            border-radius: 2px;
+            letter-spacing: 1.5px;
+            font-family: inherit;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .bar-btn:hover {
+            border-color: var(--sat-a);
+            color: var(--sat-a);
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<!-- ════════════════ HEADER ════════════════ -->
+<div id="header">
+    <h1>LAMBERT SOLVER</h1>
+    <div class="badge">PHASE 1</div>
+    <div class="subtitle">EARTH-CENTERED · 2D ORBITAL TRANSFER · PROGRADE</div>
+</div>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<div id="main">
+
+    <!-- Canvas -->
+    <div id="canvas-wrapper">
+        <canvas id="mainCanvas"></canvas>
+
+        <div id="hint-overlay">
+            <div>SCROLL — zoom</div>
+            <div>DRAG &nbsp;&nbsp; — pan</div>
+        </div>
+
+        <div id="canvas-overlay">
+            <div class="ov-row">ZOOM &nbsp;<span class="ov-val" id="ov-zoom">—</span></div>
+            <div class="ov-row">POS &nbsp;&nbsp;<span class="ov-val" id="ov-coords">—</span></div>
+        </div>
+    </div>
+
+    <!-- Side panel -->
+    <div id="side-panel">
+
+        <!-- 1. Orbital Parameters -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Orbital Parameters</span>
+            </div>
+            <table class="orbit-table">
+                <thead>
+                    <tr>
+                        <th>Orbit</th>
+                        <th>a (km)</th>
+                        <th>e</th>
+                        <th>T (min)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="row-dep">
+                        <td>DEPARTURE</td>
+                        <td id="op-a1">—</td>
+                        <td id="op-e1">—</td>
+                        <td id="op-T1">—</td>
+                    </tr>
+                    <tr class="row-xfer">
+                        <td>TRANSFER</td>
+                        <td class="pending">—</td>
+                        <td class="pending">—</td>
+                        <td class="pending">—</td>
+                    </tr>
+                    <tr class="row-arr">
+                        <td>ARRIVAL</td>
+                        <td id="op-a3">—</td>
+                        <td id="op-e3">—</td>
+                        <td id="op-T3">—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 2. ΔV Budget -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">ΔV Budget</span>
+                <span class="panel-tag">AWAITING SOLVER</span>
+            </div>
+            <div class="dv-row">
+                <span class="dv-label">Δv₁ &nbsp;departure burn</span>
+                <span class="dv-val" id="dv1"><span class="pending-val">phase 2</span></span>
+            </div>
+            <div class="dv-row">
+                <span class="dv-label">Δv₂ &nbsp;arrival burn</span>
+                <span class="dv-val" id="dv2"><span class="pending-val">phase 2</span></span>
+            </div>
+            <div class="dv-row">
+                <span class="dv-label">TOTAL ΔV</span>
+                <span class="dv-val total-val" id="dvtot"><span class="pending-val">—</span></span>
+            </div>
+        </div>
+
+        <!-- 3. Math Walkthrough -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Math Walkthrough</span>
+                <button class="expand-btn" id="math-btn">EXPAND</button>
+            </div>
+            <div id="math-body" class="math-body" style="display:none;">
+                <div class="math-step">
+                    <div class="step-label">Step 1 — Inputs</div>
+                    <div class="step-content math-pending">r₁, r₂ positions · time of flight</div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">Step 2 — Geometry</div>
+                    <div class="step-content math-pending">chord c · semi-perimeter s · transfer angle Δθ</div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">Step 3 — Universal Variable z</div>
+                    <div class="step-content math-pending">Newton-Raphson on F(z) = 0<br>using Stumpff C(z), S(z)</div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">Step 4 — Lagrange Coefficients</div>
+                    <div class="step-content math-pending">f, g, ḟ, ġ → v₁, v₂</div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">Step 5 — Outputs</div>
+                    <div class="step-content math-pending">v₁, v₂ · Δv₁, Δv₂ · transfer orbit elements</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. ΔV vs ToF Chart -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">ΔV vs Time of Flight</span>
+            </div>
+            <canvas id="dv-tof-canvas"></canvas>
+            <div class="chart-note">AVAILABLE AFTER PHASE 2</div>
+        </div>
+
+        <!-- 5. Legend -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Legend</span>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#00d4ff;"></div>
+                    <span>Satellite A — departure orbit</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ff8c42;"></div>
+                    <span>Satellite B — arrival orbit</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#ffd700;"></div>
+                    <span>Transfer orbit (phase 3)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#4aed88; height:1px;"></div>
+                    <span>Δv₁ departure burn vector</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#ff4a6a; height:1px;"></div>
+                    <span>Δv₂ arrival burn vector</span>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /side-panel -->
+</div><!-- /main -->
+
+<!-- ════════════════ BOTTOM BAR ════════════════ -->
+<div id="bottom-bar">
+    <div class="tof-info">
+        <div class="tof-title">TIME OF FLIGHT</div>
+        <div class="tof-value" id="tof-display">—<span class="tof-unit">hrs</span></div>
+    </div>
+    <input type="range" id="tof-slider" min="0" max="100" value="50" disabled>
+    <div class="bar-buttons">
+        <button class="bar-btn" id="btn-hohmann">HOHMANN</button>
+        <button class="bar-btn" id="btn-reset-view">RESET VIEW</button>
+    </div>
+</div>
+
+<!-- ════════════════ SCRIPT ════════════════ -->
+<script>
+'use strict';
+
+// ================================================================
+// PHYSICAL CONSTANTS
+// ================================================================
+const MU           = 3.986004418e5;  // km³/s²  (Earth GM)
+const EARTH_RADIUS = 6371;           // km
+const TWO_PI       = Math.PI * 2;
+
+// ================================================================
+// EARTH TEXTURE
+// ================================================================
+const earthImg = new Image();
+earthImg.src = 'earth top view.jpg';
+earthImg.onload = () => { if (state.initialized) render(); };
+
+// ================================================================
+// APPLICATION STATE
+//   All mutable data lives here so later phases can extend cleanly.
+// ================================================================
+const state = {
+
+    // ── Satellite A (departure, cyan) ──
+    satA: {
+        orbit:  { a: EARTH_RADIUS + 400, e: 0, omega: 0 },
+        nu:     Math.PI * 0.25,   // true anomaly (rad)
+        color:  '#00d4ff',
+        name:   'SAT A',
+        r:      6,                // canvas dot radius px
+    },
+
+    // ── Satellite B (arrival, orange) ──
+    satB: {
+        orbit:  { a: EARTH_RADIUS + 20000, e: 0, omega: 0 },
+        nu:     Math.PI * 1.35,
+        color:  '#ff8c42',
+        name:   'SAT B',
+        r:      6,
+    },
+
+    // ── Transfer orbit (populated by Lambert solver in Phase 2) ──
+    transfer: {
+        valid:  false,
+        orbit:  null,
+        v1:     null,
+        v2:     null,
+        dv1mag: null,
+        dv2mag: null,
+        tof:    null,
+    },
+
+    // ── Camera ──
+    camera: { x: 0, y: 0, scale: 1 },
+
+    // ── Interaction ──
+    isPanning:    false,
+    panStart:     { cx: 0, cy: 0, camX: 0, camY: 0 },
+    mouseWorld:   { x: 0, y: 0 },
+
+    // ── Star field (generated once) ──
+    stars: [],
+
+    // ── Misc ──
+    initialized: false,
+};
+
+// ================================================================
+// CANVAS SETUP
+// ================================================================
+const canvas = document.getElementById('mainCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+    const wrapper = document.getElementById('canvas-wrapper');
+    canvas.width  = wrapper.clientWidth;
+    canvas.height = wrapper.clientHeight;
+
+    if (!state.initialized) {
+        resetView();
+        state.initialized = true;
+    }
+
+    render();
+}
+
+// ================================================================
+// COORDINATE TRANSFORMS  (world = km, y-up; canvas = px, y-down)
+// ================================================================
+function worldToCanvas(wx, wy) {
+    return [
+        canvas.width  / 2 + (wx - state.camera.x) * state.camera.scale,
+        canvas.height / 2 - (wy - state.camera.y) * state.camera.scale,
+    ];
+}
+
+function canvasToWorld(cx, cy) {
+    return [
+        (cx - canvas.width  / 2) / state.camera.scale + state.camera.x,
+       -((cy - canvas.height / 2) / state.camera.scale) + state.camera.y,
+    ];
+}
+
+function km2px(d) { return d * state.camera.scale; }
+
+// ================================================================
+// ORBITAL MECHANICS HELPERS
+// ================================================================
+
+// Position vector (km) at true anomaly ν on given orbit
+function orbitPos(orbit, nu) {
+    const { a, e, omega } = orbit;
+    const p = a * (1 - e * e);                    // semi-latus rectum
+    const r = p / (1 + e * Math.cos(nu));         // radial distance
+    return { x: r * Math.cos(nu + omega),
+             y: r * Math.sin(nu + omega) };
+}
+
+// Circular orbit speed (km/s) at radius r
+function vcircular(r) { return Math.sqrt(MU / r); }
+
+// Orbital period (s) from semi-major axis
+function period(a) { return TWO_PI * Math.sqrt(a * a * a / MU); }
+
+// ================================================================
+// STAR FIELD
+// ================================================================
+function generateStars(n) {
+    state.stars = [];
+    for (let i = 0; i < n; i++) {
+        state.stars.push({
+            px:   Math.random(),
+            py:   Math.random(),
+            size: Math.random() * 1.4 + 0.3,
+            alpha: Math.random() * 0.65 + 0.15,
+        });
+    }
+}
+
+// ================================================================
+// DRAWING PRIMITIVES
+// ================================================================
+
+function drawBackground() {
+    ctx.fillStyle = '#080818';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawStars() {
+    for (const s of state.stars) {
+        ctx.beginPath();
+        ctx.arc(s.px * canvas.width, s.py * canvas.height, s.size, 0, TWO_PI);
+        ctx.fillStyle = `rgba(200,215,255,${s.alpha})`;
+        ctx.fill();
+    }
+}
+
+function drawCrosshair() {
+    const [cx, cy] = worldToCanvas(0, 0);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(80,120,180,0.12)';
+    ctx.lineWidth   = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy);
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawEarth() {
+    const [cx, cy] = worldToCanvas(0, 0);
+    const r        = km2px(EARTH_RADIUS);
+
+    // Outer atmosphere glow (drawn behind Earth)
+    const atmo = ctx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.45);
+    atmo.addColorStop(0,   'rgba(60,140,255,0.22)');
+    atmo.addColorStop(0.4, 'rgba(30,100,220,0.10)');
+    atmo.addColorStop(1,   'rgba(10, 50,200,0)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.45, 0, TWO_PI);
+    ctx.fillStyle = atmo;
+    ctx.fill();
+
+    // Clip to Earth circle for texture + overlays
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.clip();
+
+    if (earthImg.complete && earthImg.naturalWidth > 0) {
+        // Draw texture
+        ctx.drawImage(earthImg, cx - r, cy - r, r * 2, r * 2);
+    } else {
+        // Fallback gradient while image loads
+        const body = ctx.createRadialGradient(cx - r * 0.28, cy - r * 0.28, r * 0.08, cx, cy, r);
+        body.addColorStop(0,    '#5aaae8');
+        body.addColorStop(0.35, '#2260b8');
+        body.addColorStop(1,    '#091540');
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, TWO_PI);
+        ctx.fillStyle = body;
+        ctx.fill();
+    }
+
+    // Vignette — darkens edges to give spherical depth
+    const vignette = ctx.createRadialGradient(cx - r * 0.15, cy - r * 0.15, r * 0.2, cx, cy, r);
+    vignette.addColorStop(0,   'rgba(0,0,0,0)');
+    vignette.addColorStop(0.65,'rgba(0,0,0,0.12)');
+    vignette.addColorStop(1,   'rgba(0,0,0,0.70)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.fillStyle = vignette;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Atmosphere rim (drawn on top of Earth edge)
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(100,190,255,0.45)';
+    ctx.lineWidth   = Math.max(1.5, r * 0.03);
+    ctx.stroke();
+}
+
+function drawOrbit(orbit, color, lineWidth, dash = []) {
+    const steps = 720;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash(dash);
+    ctx.lineWidth   = lineWidth;
+    ctx.strokeStyle = color;
+
+    for (let i = 0; i <= steps; i++) {
+        const nu  = (i / steps) * TWO_PI;
+        const pos = orbitPos(orbit, nu);
+        const [cx, cy] = worldToCanvas(pos.x, pos.y);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+function drawOrbitLabel(orbit, nu, text, color) {
+    const pos = orbitPos(orbit, nu);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+    ctx.save();
+    ctx.font      = '10px Courier New';
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6;
+    ctx.fillText(text, cx + 5, cy - 5);
+    ctx.restore();
+}
+
+function drawSatellite(sat) {
+    const pos      = orbitPos(sat.orbit, sat.nu);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+    const r        = sat.r;
+
+    // Glow
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 4);
+    glow.addColorStop(0,   sat.color + 'bb');
+    glow.addColorStop(0.4, sat.color + '44');
+    glow.addColorStop(1,   sat.color + '00');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 4, 0, TWO_PI);
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    // Body
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.fillStyle   = sat.color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+
+    // Label
+    ctx.font      = 'bold 11px Courier New';
+    ctx.fillStyle = sat.color;
+    ctx.fillText(sat.name, cx + r + 6, cy - r + 1);
+}
+
+// Scale bar in bottom-right corner
+function drawScaleBar() {
+    // Target ~100px wide. Find the nearest "nice" km value.
+    const targetKm = 100 / state.camera.scale;
+    const exp  = Math.floor(Math.log10(targetKm));
+    const pow  = Math.pow(10, exp);
+    const frac = targetKm / pow;
+    let nice;
+    if      (frac < 1.5) nice = pow;
+    else if (frac < 3.5) nice = 2 * pow;
+    else if (frac < 7.5) nice = 5 * pow;
+    else                 nice = 10 * pow;
+
+    const barPx     = km2px(nice);
+    const rightEdge = canvas.width - 20;
+    const bx        = rightEdge - barPx;   // bar anchored to right edge
+    const by        = canvas.height - 28;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(150,170,210,0.6)';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx,         by);
+    ctx.lineTo(bx + barPx, by);
+    ctx.moveTo(bx,         by - 5); ctx.lineTo(bx,         by + 5);
+    ctx.moveTo(bx + barPx, by - 5); ctx.lineTo(bx + barPx, by + 5);
+    ctx.stroke();
+
+    let label;
+    if      (nice >= 1e6)  label = `${(nice / 1e6).toFixed(0)} M km`;
+    else if (nice >= 1000) label = `${(nice / 1000).toFixed(nice >= 10000 ? 0 : 1)}k km`;
+    else                   label = `${nice.toFixed(0)} km`;
+
+    ctx.font      = '9px Courier New';
+    ctx.fillStyle = 'rgba(150,170,210,0.7)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, bx + barPx / 2, by - 8);
+    ctx.restore();
+}
+
+// ================================================================
+// MAIN RENDER
+// ================================================================
+function render() {
+    drawBackground();
+    drawStars();
+    drawCrosshair();
+
+    // Orbits (draw before Earth so Earth sits on top)
+    drawOrbit(state.satA.orbit, state.satA.color + '50', 1.5);
+    drawOrbit(state.satB.orbit, state.satB.color + '50', 1.5);
+
+    // Earth
+    drawEarth();
+
+    // Orbit altitude labels
+    drawOrbitLabel(state.satA.orbit, Math.PI * 1.75,
+        `${(state.satA.orbit.a - EARTH_RADIUS).toFixed(0)} km`, state.satA.color);
+    drawOrbitLabel(state.satB.orbit, Math.PI * 1.75,
+        `${(state.satB.orbit.a - EARTH_RADIUS).toFixed(0)} km`, state.satB.color);
+
+    // Satellites
+    drawSatellite(state.satA);
+    drawSatellite(state.satB);
+
+    // Scale bar
+    drawScaleBar();
+
+    updateOverlay();
+}
+
+// ================================================================
+// PANEL UPDATES
+// ================================================================
+function updateOrbitPanel() {
+    const a1 = state.satA.orbit.a;
+    const a3 = state.satB.orbit.a;
+    const T1 = period(a1) / 60;
+    const T3 = period(a3) / 60;
+
+    document.getElementById('op-a1').textContent = a1.toLocaleString('en', {maximumFractionDigits: 0});
+    document.getElementById('op-e1').textContent = state.satA.orbit.e.toFixed(3);
+    document.getElementById('op-T1').textContent = T1.toFixed(1);
+
+    document.getElementById('op-a3').textContent = a3.toLocaleString('en', {maximumFractionDigits: 0});
+    document.getElementById('op-e3').textContent = state.satB.orbit.e.toFixed(3);
+    document.getElementById('op-T3').textContent = T3.toFixed(1);
+}
+
+function updateOverlay() {
+    // Compute zoom relative to initial "fit" scale
+    const outerR   = state.satB.orbit.a;
+    const fitScale = Math.min(canvas.width, canvas.height) / (2 * outerR * 1.4);
+    const zoom     = (state.camera.scale / fitScale).toFixed(2);
+
+    document.getElementById('ov-zoom').textContent   = `${zoom}×`;
+    document.getElementById('ov-coords').textContent =
+        `${state.mouseWorld.x.toFixed(0)}, ${state.mouseWorld.y.toFixed(0)} km`;
+}
+
+// ================================================================
+// CHART CANVAS PLACEHOLDER
+// ================================================================
+function drawChartPlaceholder() {
+    const c = document.getElementById('dv-tof-canvas');
+    // Set pixel size from layout size
+    const rect = c.getBoundingClientRect();
+    c.width  = rect.width  || 308;
+    c.height = rect.height || 130;
+
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#0a0a20';
+    cx.fillRect(0, 0, c.width, c.height);
+
+    // Placeholder axes
+    cx.strokeStyle = '#1a2540';
+    cx.lineWidth   = 1;
+    cx.beginPath();
+    cx.moveTo(28, 10); cx.lineTo(28, c.height - 20);
+    cx.lineTo(c.width - 10, c.height - 20);
+    cx.stroke();
+
+    // Placeholder curve (rough U shape to hint at shape)
+    cx.beginPath();
+    cx.moveTo(30, c.height - 22);
+    const pts = 60;
+    for (let i = 0; i <= pts; i++) {
+        const t  = i / pts;
+        const yCurve = 0.8 + 3.5 * (t - 0.28) * (t - 0.28); // parabola hint
+        const px = 30 + t * (c.width - 42);
+        const py = (c.height - 22) - Math.min(yCurve * 18, c.height - 34);
+        i === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py);
+    }
+    cx.strokeStyle = '#2a3a60';
+    cx.lineWidth   = 1.5;
+    cx.setLineDash([3, 3]);
+    cx.stroke();
+    cx.setLineDash([]);
+
+    cx.font      = '9px Courier New';
+    cx.fillStyle = '#2a3a60';
+    cx.textAlign = 'left';
+    cx.fillText('ΔV (m/s)', 30, 10);
+    cx.textAlign = 'center';
+    cx.fillText('TIME OF FLIGHT', c.width / 2, c.height - 5);
+}
+
+// ================================================================
+// VIEW RESET
+// ================================================================
+function resetView() {
+    const outerR = state.satB.orbit.a;
+    state.camera.x     = 0;
+    state.camera.y     = 0;
+    state.camera.scale = Math.min(canvas.width, canvas.height) / (2 * outerR * 1.4);
+}
+
+// ================================================================
+// EVENT HANDLERS
+// ================================================================
+
+// Zoom toward mouse
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.88 : 1.12;
+
+    // World coords under mouse before zoom
+    const [wx, wy] = canvasToWorld(e.offsetX, e.offsetY);
+
+    state.camera.scale *= factor;
+
+    // Keep world point under mouse fixed after zoom
+    state.camera.x = wx - (e.offsetX - canvas.width  / 2) / state.camera.scale;
+    state.camera.y = wy + (e.offsetY - canvas.height / 2) / state.camera.scale;
+
+    render();
+}, { passive: false });
+
+// Pan start
+canvas.addEventListener('mousedown', (e) => {
+    state.isPanning = true;
+    state.panStart  = {
+        cx: e.offsetX, cy: e.offsetY,
+        camX: state.camera.x, camY: state.camera.y,
+    };
+    canvas.classList.add('panning');
+});
+
+// Pan move + coords tracking
+canvas.addEventListener('mousemove', (e) => {
+    const [wx, wy]    = canvasToWorld(e.offsetX, e.offsetY);
+    state.mouseWorld  = { x: wx, y: wy };
+
+    if (state.isPanning) {
+        const dx = (e.offsetX - state.panStart.cx) / state.camera.scale;
+        const dy = (e.offsetY - state.panStart.cy) / state.camera.scale;
+        state.camera.x = state.panStart.camX - dx;
+        state.camera.y = state.panStart.camY + dy; // y-flip
+        render();
+    } else {
+        updateOverlay();
+    }
+});
+
+canvas.addEventListener('mouseup',    () => { state.isPanning = false; canvas.classList.remove('panning'); });
+canvas.addEventListener('mouseleave', () => { state.isPanning = false; canvas.classList.remove('panning'); });
+
+// Touch support (pan & pinch)
+let lastTouchDist = null;
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+        const t = e.touches[0];
+        state.isPanning = true;
+        state.panStart  = { cx: t.clientX, cy: t.clientY, camX: state.camera.x, camY: state.camera.y };
+    } else if (e.touches.length === 2) {
+        lastTouchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && state.isPanning) {
+        const t  = e.touches[0];
+        const dx = (t.clientX - state.panStart.cx) / state.camera.scale;
+        const dy = (t.clientY - state.panStart.cy) / state.camera.scale;
+        state.camera.x = state.panStart.camX - dx;
+        state.camera.y = state.panStart.camY + dy;
+        render();
+    } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        if (lastTouchDist) {
+            state.camera.scale *= dist / lastTouchDist;
+            render();
+        }
+        lastTouchDist = dist;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { state.isPanning = false; lastTouchDist = null; });
+
+// Math toggle
+document.getElementById('math-btn').addEventListener('click', () => {
+    const body = document.getElementById('math-body');
+    const btn  = document.getElementById('math-btn');
+    const open = body.style.display === 'none';
+    body.style.display = open ? 'block' : 'none';
+    btn.textContent    = open ? 'COLLAPSE' : 'EXPAND';
+});
+
+// Reset view button
+document.getElementById('btn-reset-view').addEventListener('click', () => {
+    resetView();
+    render();
+});
+
+// Hohmann button (placeholder — wired in Phase 4)
+document.getElementById('btn-hohmann').addEventListener('click', () => {
+    // Will snap satellites to Hohmann positions in Phase 4
+    console.log('[Phase 4] Hohmann snap — not yet implemented');
+});
+
+// ================================================================
+// INIT
+// ================================================================
+generateStars(220);
+updateOrbitPanel();
+
+// Wait for layout to settle before sizing canvas
+window.addEventListener('load', () => {
+    resizeCanvas();
+    drawChartPlaceholder();
+});
+
+window.addEventListener('resize', () => {
+    resizeCanvas();
+    drawChartPlaceholder();
+});
+
+// Fallback if load already fired
+if (document.readyState === 'complete') {
+    resizeCanvas();
+    drawChartPlaceholder();
+}
+</script>
+</body>
+</html>
