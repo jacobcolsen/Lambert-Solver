@@ -444,10 +444,7 @@
     <div id="canvas-wrapper">
         <canvas id="mainCanvas"></canvas>
 
-        <div id="hint-overlay">
-            <div>SCROLL — zoom</div>
-            <div>DRAG &nbsp;&nbsp; — pan</div>
-        </div>
+        <div id="hint-overlay" style="display:none;"></div>
 
         <div id="canvas-overlay">
             <div class="ov-row">ZOOM &nbsp;<span class="ov-val" id="ov-zoom">—</span></div>
@@ -552,6 +549,50 @@
             </div>
             <canvas id="dv-tof-canvas"></canvas>
             <div class="chart-note">AVAILABLE AFTER PHASE 2</div>
+        </div>
+
+        <!-- DEBUG: Phase 2 Validation -->
+        <div class="panel" id="panel-validation">
+            <div class="panel-header">
+                <span class="panel-title">Phase 2 — Hohmann Validation</span>
+                <span class="panel-tag" id="val-badge">—</span>
+            </div>
+            <table class="orbit-table" style="font-size:11px;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;">Quantity</th>
+                        <th>Analytical</th>
+                        <th>Lambert</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color:var(--text-dim);">Δv₁ (m/s)</td>
+                        <td id="val-dv1-a">—</td>
+                        <td id="val-dv1-l">—</td>
+                        <td id="val-dv1-e">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--text-dim);">Δv₂ (m/s)</td>
+                        <td id="val-dv2-a">—</td>
+                        <td id="val-dv2-l">—</td>
+                        <td id="val-dv2-e">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--text-dim);">Total (m/s)</td>
+                        <td id="val-tot-a">—</td>
+                        <td id="val-tot-l">—</td>
+                        <td id="val-tot-e">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--text-dim);">Iterations</td>
+                        <td id="val-iters-a">—</td>
+                        <td id="val-iters-l">—</td>
+                        <td>—</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- 5. Legend -->
@@ -675,6 +716,15 @@ const state = {
     // ── Star field (generated once) ──
     stars: [],
 
+    // ── Animation & time warp ──
+    anim: {
+        lastTime:   null,    // performance.now() of last rAF frame
+        simTime:    0,       // accumulated simulation time (seconds)
+        warpIndex:  0,       // index into warpLevels
+        warpLevels: [1, 5, 10, 50, 100, 1000, 10000, 100000],
+        warpLabels: ['1×', '5×', '10×', '50×', '100×', '1k×', '10k×', '100k×'],
+    },
+
     // ── Misc ──
     initialized: false,
 };
@@ -735,6 +785,192 @@ function vcircular(r) { return Math.sqrt(MU / r); }
 
 // Orbital period (s) from semi-major axis
 function period(a) { return TWO_PI * Math.sqrt(a * a * a / MU); }
+
+// ================================================================
+// LAMBERT SOLVER  (Bate / Mueller / White universal variable method)
+// ================================================================
+
+// Stumpff functions  C(z) and S(z)
+function stumpffC(z) {
+    if (z > 1e-6)  return (1 - Math.cos(Math.sqrt(z)))  / z;
+    if (z < -1e-6) return (Math.cosh(Math.sqrt(-z)) - 1) / (-z);
+    return 0.5; // limit as z→0
+}
+
+function stumpffS(z) {
+    if (z > 1e-6) {
+        const sq = Math.sqrt(z);
+        return (sq - Math.sin(sq)) / (sq * sq * sq);
+    }
+    if (z < -1e-6) {
+        const sq = Math.sqrt(-z);
+        return (Math.sinh(sq) - sq) / (sq * sq * sq);
+    }
+    return 1/6; // limit as z→0
+}
+
+/**
+ * Lambert solver — universal variable formulation.
+ *
+ * @param {number[]} r1   [x,y] km  departure position
+ * @param {number[]} r2   [x,y] km  arrival  position
+ * @param {number}   tof  seconds   time of flight
+ * @param {boolean}  prograde       true = short-way (prograde)
+ * @returns {{ v1:[x,y], v2:[x,y], converged:bool, iters:number, debug:object }}
+ */
+function lambertSolve(r1, r2, tof, prograde = true) {
+    const r1mag = Math.hypot(r1[0], r1[1]);
+    const r2mag = Math.hypot(r2[0], r2[1]);
+
+    // Cross product (2-D: only z-component)
+    const cross = r1[0] * r2[1] - r1[1] * r2[0];
+
+    // Transfer angle Δθ
+    let cosNU = (r1[0]*r2[0] + r1[1]*r2[1]) / (r1mag * r2mag);
+    cosNU = Math.max(-1, Math.min(1, cosNU)); // clamp for numerical safety
+    let dnu = Math.acos(cosNU);
+    if (prograde) {
+        if (cross < 0) dnu = TWO_PI - dnu;
+    } else {
+        if (cross >= 0) dnu = TWO_PI - dnu;
+    }
+
+    // Degenerate cases
+    if (Math.abs(dnu) < 1e-10 || Math.abs(dnu - TWO_PI) < 1e-10 ||
+        Math.abs(dnu - Math.PI) < 1e-6) {
+        return { v1: null, v2: null, converged: false, iters: 0,
+                 debug: { error: 'Degenerate transfer angle' } };
+    }
+
+    const A = Math.sin(dnu) * Math.sqrt(r1mag * r2mag / (1 - Math.cos(dnu)));
+
+    // Newton-Raphson on F(z) = t*(z) - tof = 0
+    // Initial guess: z = 0 (parabolic)
+    let z    = 0;
+    const TOL  = 1e-8;
+    const ITER = 60;
+    let converged = false;
+    let iters     = 0;
+    let y, C, S, sqrtY, t;
+
+    for (let i = 0; i < ITER; i++) {
+        C    = stumpffC(z);
+        S    = stumpffS(z);
+        y    = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
+        if (y < 0) { z += 0.1; continue; } // keep y positive
+
+        sqrtY = Math.sqrt(y);
+        const chi   = sqrtY / Math.sqrt(C);
+        t     = (chi * chi * chi * S + A * sqrtY) / Math.sqrt(MU);
+
+        // Derivative dt/dz
+        let dtdz;
+        if (Math.abs(z) > 1e-8) {
+            const dy_dz = A / (2*Math.sqrt(C)) *
+                          (3*S*C/(2*C) - 3*S/(2*C) +
+                           A / Math.sqrt(r1mag*r2mag));   // simplified
+            // More robust version:
+            const yCz    = y / C;
+            const dydz   = A * (3*S*C - 2) / (4*C*C) + A * (A/(8*sqrtY*C));
+            dtdz = (chi*chi*chi * (S/(2*z) - (3*S*S)/(2*C)) + A/8 * (3*S*sqrtY/C + A*Math.sqrt(C/y))) / Math.sqrt(MU);
+        } else {
+            dtdz = Math.sqrt(2) / 40 * Math.pow(y, 1.5) / Math.sqrt(MU);
+        }
+
+        const dF = t - tof;
+        if (Math.abs(dF) < TOL) { converged = true; iters = i + 1; break; }
+
+        z -= dF / dtdz;
+        iters = i + 1;
+    }
+    if (!converged && Math.abs(t - tof) < 1e-4) converged = true; // near-converged
+
+    if (!converged) {
+        return { v1: null, v2: null, converged: false, iters,
+                 debug: { z, t, tof, error: 'Did not converge' } };
+    }
+
+    // Lagrange coefficients
+    C = stumpffC(z); S = stumpffS(z);
+    y = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
+    sqrtY = Math.sqrt(y);
+
+    const f    =  1 - y / r1mag;
+    const g    =  A * sqrtY / Math.sqrt(MU);
+    const gdot =  1 - y / r2mag;
+
+    // Velocities
+    const v1 = [
+        (r2[0] - f * r1[0]) / g,
+        (r2[1] - f * r1[1]) / g,
+    ];
+    const v2 = [
+        (gdot * r2[0] - r1[0]) / g,
+        (gdot * r2[1] - r1[1]) / g,
+    ];
+
+    return { v1, v2, converged, iters,
+             debug: { z, y, f, g, gdot, C, S, dnu: dnu * 180/Math.PI } };
+}
+
+// ================================================================
+// VALIDATION  (Hohmann test — run once on load)
+// ================================================================
+
+/**
+ * Hohmann transfer analytical ΔV values for comparison.
+ * From circular orbit a1 to circular orbit a2.
+ */
+function hohmannDV(a1, a2) {
+    const vc1   = vcircular(a1);
+    const vc2   = vcircular(a2);
+    const at    = (a1 + a2) / 2;                      // transfer semi-major axis
+    const vp    = Math.sqrt(MU * (2/a1 - 1/at));      // speed at periapsis of transfer
+    const va    = Math.sqrt(MU * (2/a2 - 1/at));      // speed at apoapsis of transfer
+    const dv1   = Math.abs(vp - vc1);
+    const dv2   = Math.abs(vc2 - va);
+    const tof   = Math.PI * Math.sqrt(at*at*at / MU); // half-period
+    return { dv1, dv2, total: dv1+dv2, tof, vc1, vc2, vp, va, at };
+}
+
+function runValidation() {
+    const a1 = EARTH_RADIUS + 400;    // km
+    const a2 = EARTH_RADIUS + 20000;  // km
+    const h  = hohmannDV(a1, a2);
+
+    // Departure: satellite on a1 at angle 0 (periapsis direction = +x)
+    const r1 = [a1, 0];
+    // Arrival:   satellite on a2, directly opposite (180° transfer)
+    const r2 = [-a2, 0];
+
+    const sol = lambertSolve(r1, r2, h.tof, true);
+
+    const result = { hohmann: h, lambert: null, match: false };
+
+    if (sol.converged) {
+        // v_sat1 at departure: circular, tangent = [0, vc1]
+        const dv1 = Math.hypot(sol.v1[0] - 0, sol.v1[1] - h.vc1) * 1000; // m/s
+        // v_sat2 at arrival: circular, tangent = [0, -vc2] (going in -y at -x position)
+        const dv2 = Math.hypot(sol.v2[0] - 0, sol.v2[1] - (-h.vc2)) * 1000; // m/s
+
+        const dv1_analytic = h.dv1 * 1000;
+        const dv2_analytic = h.dv2 * 1000;
+        const err1 = Math.abs(dv1 - dv1_analytic);
+        const err2 = Math.abs(dv2 - dv2_analytic);
+
+        result.lambert = { dv1, dv2, total: dv1+dv2, iters: sol.iters };
+        result.match   = (err1 < 1.0 && err2 < 1.0); // within 1 m/s
+        result.err1    = err1;
+        result.err2    = err2;
+    } else {
+        result.error = sol.debug.error || 'Solver failed';
+    }
+
+    return result;
+}
+
+// Run validation on load and cache result
+const validation = runValidation();
 
 // ================================================================
 // STAR FIELD
@@ -871,7 +1107,8 @@ function drawMoon() {
         const size = Math.min(iw, ih);
         const sx   = (iw - size) / 2;
         const sy   = (ih - size) / 2;
-        ctx.drawImage(moonImg, sx, sy, size, size, cx - r, cy - r, r * 2, r * 2);
+        const s = 1.08;  // scale up slightly so moon fills to clip edge
+        ctx.drawImage(moonImg, sx, sy, size, size, cx - r * s, cy - r * s, r * 2 * s, r * 2 * s);
     } else {
         ctx.fillStyle = '#7a7a72';
         ctx.beginPath();
@@ -1007,6 +1244,125 @@ function drawScaleBar() {
 }
 
 // ================================================================
+// TIME WARP INDICATOR
+// ================================================================
+function drawTimeWarp() {
+    const { warpIndex, warpLevels, warpLabels, simTime } = state.anim;
+    const levels = warpLabels;
+    const n      = levels.length;
+
+    const pad  = 14;
+    const x    = pad;
+    const y    = pad;
+
+    ctx.save();
+
+    // ── Sim time string ──
+    const totalSec = Math.floor(simTime);
+    const days  = Math.floor(totalSec / 86400);
+    const hrs   = Math.floor((totalSec % 86400) / 3600);
+    const mins  = Math.floor((totalSec % 3600)  / 60);
+    const secs  = totalSec % 60;
+    const timeStr = `${String(days).padStart(3,'0')}d  ${String(hrs).padStart(2,'0')}h  ${String(mins).padStart(2,'0')}m  ${String(secs).padStart(2,'0')}s`;
+
+    // ── Measure layout ──
+    ctx.font = 'bold 11px Courier New';
+    const cellW  = 44;
+    const cellH  = 20;
+    const barW   = n * cellW + (n - 1) * 3;
+    const boxH   = 54;
+    const boxW   = Math.max(barW, 220);
+
+    // Background
+    ctx.fillStyle   = 'rgba(8,8,24,0.82)';
+    ctx.strokeStyle = 'rgba(40,60,100,0.7)';
+    ctx.lineWidth   = 1;
+    roundRect(ctx, x, y, boxW, boxH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // ── Warp level label ──
+    const mult   = warpLevels[warpIndex];
+    const isWarp = mult > 1;
+    ctx.font      = 'bold 13px Courier New';
+    ctx.fillStyle = isWarp ? '#ffd700' : '#00d4ff';
+    ctx.textAlign = 'left';
+    ctx.fillText('TIME WARP', x + 10, y + 16);
+
+    ctx.font      = 'bold 13px Courier New';
+    ctx.fillStyle = isWarp ? '#ffd700' : '#b8c8e0';
+    ctx.textAlign = 'right';
+    ctx.fillText(warpLabels[warpIndex], x + boxW - 10, y + 16);
+
+    // ── Level pip bar ──
+    const pipY  = y + 24;
+    const pipW  = (boxW - 20) / n - 3;
+    for (let i = 0; i < n; i++) {
+        const px = x + 10 + i * (pipW + 3);
+        const active = i <= warpIndex;
+        ctx.fillStyle = active
+            ? (isWarp ? '#ffd700' : '#00d4ff')
+            : 'rgba(80,100,140,0.35)';
+        ctx.fillRect(px, pipY, pipW, 4);
+    }
+
+    // ── Sim time ──
+    ctx.font      = '10px Courier New';
+    ctx.fillStyle = 'rgba(160,180,210,0.75)';
+    ctx.textAlign = 'left';
+    ctx.fillText(timeStr, x + 10, y + boxH - 8);
+
+    // ── Key hints ──
+    ctx.font      = '9px Courier New';
+    ctx.fillStyle = 'rgba(80,100,140,0.8)';
+    ctx.textAlign = 'right';
+    ctx.fillText('[,] slower  [.] faster', x + boxW - 10, y + boxH - 8);
+
+    ctx.restore();
+}
+
+// Helper — rounded rectangle path
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y,     x + w, y + r,     r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x,     y + h, x,     y + h - r, r);
+    ctx.lineTo(x,     y + r);
+    ctx.arcTo(x,     y,     x + r, y,         r);
+    ctx.closePath();
+}
+
+// ================================================================
+// ANIMATION LOOP
+// ================================================================
+
+// Mean motion (rad/s) for a circular or near-circular orbit
+function meanMotion(a) { return Math.sqrt(MU / (a * a * a)); }
+
+function animLoop(timestamp) {
+    if (state.anim.lastTime !== null) {
+        const realDt = (timestamp - state.anim.lastTime) / 1000; // wall-clock seconds
+        // Cap real dt to avoid huge jumps after tab focus restored
+        const dt     = Math.min(realDt, 0.1) * state.anim.warpLevels[state.anim.warpIndex];
+
+        state.anim.simTime += dt;
+
+        // Advance true anomalies (exact for circular; good approximation for Moon's e=0.055)
+        state.satA.nu = (state.satA.nu + meanMotion(state.satA.orbit.a) * dt) % TWO_PI;
+        state.satB.nu = (state.satB.nu + meanMotion(state.satB.orbit.a) * dt) % TWO_PI;
+        state.moon.nu = (state.moon.nu + meanMotion(state.moon.orbit.a) * dt) % TWO_PI;
+
+        render();
+    }
+    state.anim.lastTime = timestamp;
+    requestAnimationFrame(animLoop);
+}
+
+// ================================================================
 // MAIN RENDER
 // ================================================================
 function render() {
@@ -1039,6 +1395,9 @@ function render() {
 
     // Scale bar
     drawScaleBar();
+
+    // Time warp indicator
+    drawTimeWarp();
 
     updateOverlay();
 }
@@ -1237,8 +1596,17 @@ document.getElementById('btn-reset-view').addEventListener('click', () => {
 
 // Hohmann button (placeholder — wired in Phase 4)
 document.getElementById('btn-hohmann').addEventListener('click', () => {
-    // Will snap satellites to Hohmann positions in Phase 4
     console.log('[Phase 4] Hohmann snap — not yet implemented');
+});
+
+// Time warp keys:  , = slower   . = faster  (KSP style)
+document.addEventListener('keydown', (e) => {
+    const a = state.anim;
+    if (e.key === '.') {
+        a.warpIndex = Math.min(a.warpIndex + 1, a.warpLevels.length - 1);
+    } else if (e.key === ',') {
+        a.warpIndex = Math.max(a.warpIndex - 1, 0);
+    }
 });
 
 // ================================================================
@@ -1263,6 +1631,46 @@ if (document.readyState === 'complete') {
     resizeCanvas();
     drawChartPlaceholder();
 }
+
+// Populate Phase 2 validation panel
+(function populateValidation() {
+    const v  = validation;
+    const h  = v.hohmann;
+    const ok = v.match;
+
+    const badge = document.getElementById('val-badge');
+    badge.textContent   = ok ? '✓ PASS' : '✗ FAIL';
+    badge.style.color   = ok ? 'var(--green)' : 'var(--red)';
+    badge.style.borderColor = ok ? 'var(--green)' : 'var(--red)';
+
+    const fmt = n => n.toFixed(2);
+
+    document.getElementById('val-dv1-a').textContent  = fmt(h.dv1  * 1000);
+    document.getElementById('val-dv2-a').textContent  = fmt(h.dv2  * 1000);
+    document.getElementById('val-tot-a').textContent  = fmt(h.total* 1000);
+    document.getElementById('val-iters-a').textContent = 'N/A';
+
+    if (v.lambert) {
+        const l = v.lambert;
+        document.getElementById('val-dv1-l').textContent  = fmt(l.dv1);
+        document.getElementById('val-dv2-l').textContent  = fmt(l.dv2);
+        document.getElementById('val-tot-l').textContent  = fmt(l.total);
+        document.getElementById('val-iters-l').textContent = l.iters;
+
+        const errStyle = v.match ? 'color:var(--green)' : 'color:var(--red)';
+        document.getElementById('val-dv1-e').innerHTML = `<span style="${errStyle}">${fmt(v.err1)}</span>`;
+        document.getElementById('val-dv2-e').innerHTML = `<span style="${errStyle}">${fmt(v.err2)}</span>`;
+        document.getElementById('val-tot-e').innerHTML = `<span style="${errStyle}">${fmt(Math.abs(l.total - h.total*1000))}</span>`;
+    } else {
+        const msg = v.error || 'Solver failed';
+        ['val-dv1-l','val-dv2-l','val-tot-l'].forEach(id => {
+            document.getElementById(id).innerHTML = `<span style="color:var(--red)">${msg}</span>`;
+        });
+    }
+})();
+
+// Start animation loop
+requestAnimationFrame(animLoop);
 </script>
 </body>
 </html>
