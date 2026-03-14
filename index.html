@@ -1867,6 +1867,8 @@ document.getElementById('math-btn').addEventListener('click', () => {
     const open = body.style.display !== 'none';
     body.style.display = open ? 'none' : 'block';
     btn.textContent    = open ? 'EXPAND' : 'COLLAPSE';
+    // Populate immediately when opening so user doesn't see stale "—" values
+    if (!open) updateMathPanel();
 });
 
 // ── Detect approximate Hohmann transfer ──
@@ -2443,14 +2445,6 @@ canvas.addEventListener('touchmove', (e) => {
 
 canvas.addEventListener('touchend', () => { state.isPanning = false; lastTouchDist = null; });
 
-// Math toggle
-document.getElementById('math-btn').addEventListener('click', () => {
-    const body = document.getElementById('math-body');
-    const btn  = document.getElementById('math-btn');
-    const open = body.style.display === 'none';
-    body.style.display = open ? 'block' : 'none';
-    btn.textContent    = open ? 'COLLAPSE' : 'EXPAND';
-});
 
 // Reset view button
 document.getElementById('btn-reset-view').addEventListener('click', () => {
