@@ -1491,31 +1491,6 @@ function drawTransfer() {
     drawArrow(t.r1[0], t.r1[1], dv1e[0], dv1e[1], '#4aed88', 2.5, 11);  // Δv1 green
     drawArrow(t.r2[0], t.r2[1], dv2e[0], dv2e[1], '#ff4a6a', 2.5, 11);  // Δv2 red
 
-    // ── Periapsis impact marker ──
-    if (t.impactsEarth) {
-        // Periapsis lies at nu=0 in the orbit frame (omega points to periapsis)
-        const periPos = orbitPos(orb, 0);
-        const [px, py] = worldToCanvas(periPos.x, periPos.y);
-        const R = 9;
-        ctx.save();
-        ctx.strokeStyle = '#ff4a6a';
-        ctx.lineWidth   = 2.5;
-        ctx.shadowColor = 'rgba(255,74,106,0.8)';
-        ctx.shadowBlur  = 10;
-        // X marker
-        ctx.beginPath();
-        ctx.moveTo(px - R, py - R); ctx.lineTo(px + R, py + R);
-        ctx.moveTo(px + R, py - R); ctx.lineTo(px - R, py + R);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        // Label
-        ctx.font         = 'bold 10px Courier New';
-        ctx.fillStyle    = '#ff4a6a';
-        ctx.textAlign    = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('IMPACT', px + R + 5, py);
-        ctx.restore();
-    }
 }
 
 // ================================================================
@@ -1684,6 +1659,9 @@ function render() {
 
     // Solver failure warning (above everything)
     drawSolverWarning();
+
+    // Impact marker — must be last so it's never occluded by Earth
+    drawImpactMarker();
 
     updateOverlay();
     updatePanels();
@@ -1872,6 +1850,56 @@ function snapNuToMouse(sat, wx, wy) {
     while (nu <  0)       nu += TWO_PI;
     while (nu >= TWO_PI)  nu -= TWO_PI;
     return nu;
+}
+
+// ── Periapsis impact marker — drawn on top of everything ──
+function drawImpactMarker() {
+    const t = state.transfer;
+    if (!t.valid || !t.impactsEarth) return;
+
+    const periPos      = orbitPos(t.orbit, 0);
+    const [px, py]     = worldToCanvas(periPos.x, periPos.y);
+    const R            = 14;
+
+    ctx.save();
+
+    // Outer glow ring
+    ctx.beginPath();
+    ctx.arc(px, py, R + 6, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(255,74,106,0.25)';
+    ctx.lineWidth   = 8;
+    ctx.stroke();
+
+    // X cross
+    ctx.strokeStyle = '#ff4a6a';
+    ctx.lineWidth   = 3;
+    ctx.shadowColor = 'rgba(255,74,106,0.9)';
+    ctx.shadowBlur  = 16;
+    ctx.lineCap     = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px - R, py - R); ctx.lineTo(px + R, py + R);
+    ctx.moveTo(px + R, py - R); ctx.lineTo(px - R, py + R);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // Label with background pill
+    const label = 'IMPACT';
+    ctx.font = 'bold 12px Courier New';
+    const lw = ctx.measureText(label).width;
+    const lx = px + R + 10;
+    const ly = py;
+
+    ctx.fillStyle = 'rgba(20,5,10,0.75)';
+    roundRect(ctx, lx - 4, ly - 9, lw + 8, 18, 3);
+    ctx.fill();
+
+    ctx.fillStyle    = '#ff4a6a';
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, lx, ly);
+
+    ctx.restore();
 }
 
 // ── Warning banner helper ──
