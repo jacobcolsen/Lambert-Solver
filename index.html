@@ -712,6 +712,7 @@ const state = {
     isPanning:    false,
     panStart:     { cx: 0, cy: 0, camX: 0, camY: 0 },
     mouseWorld:   { x: 0, y: 0 },
+    dragSat:      null,   // 'satA' | 'satB' | null
 
     // ── Star field (generated once) ──
     stars: [],
@@ -932,11 +933,24 @@ function lambertSolve(r1, r2, tof, prograde = true) {
         if (cross >= 0) dnu = TWO_PI - dnu;
     }
 
-    // Degenerate cases
-    if (Math.abs(dnu) < 1e-10 || Math.abs(dnu - TWO_PI) < 1e-10 ||
-        Math.abs(dnu - Math.PI) < 1e-6) {
+    // Fully degenerate: 0° or 360° transfer
+    if (Math.abs(dnu) < 1e-9 || Math.abs(dnu - TWO_PI) < 1e-9) {
         return { v1: null, v2: null, converged: false, iters: 0,
-                 debug: { error: 'Degenerate transfer angle' } };
+                 debug: { error: 'Degenerate: 0° transfer' } };
+    }
+
+    // Near-180° (Hohmann) — solve analytically to avoid A≈0 degeneracy
+    if (Math.abs(dnu - Math.PI) < 0.015) {
+        const at  = (r1mag + r2mag) / 2;
+        const vp  = Math.sqrt(MU * (2/r1mag - 1/at));  // speed at periapsis
+        const va  = Math.sqrt(MU * (2/r2mag - 1/at));  // speed at apoapsis
+        // Prograde tangent directions
+        const a1  = Math.atan2(r1[1], r1[0]);
+        const a2  = Math.atan2(r2[1], r2[0]);
+        const v1  = [-Math.sin(a1)*vp,  Math.cos(a1)*vp];
+        const v2  = [-Math.sin(a2)*va,  Math.cos(a2)*va];
+        return { v1, v2, converged: true, iters: 0,
+                 debug: { dnu: dnu*180/Math.PI, special: 'near-Hohmann analytical' } };
     }
 
     const A = Math.sin(dnu) * Math.sqrt(r1mag * r2mag / (1 - Math.cos(dnu)));
@@ -1573,9 +1587,11 @@ function animLoop(timestamp) {
 
         state.anim.simTime += dt;
 
-        // Advance true anomalies (exact for circular; good approximation for Moon's e=0.055)
-        state.satA.nu = (state.satA.nu + meanMotion(state.satA.orbit.a) * dt) % TWO_PI;
-        state.satB.nu = (state.satB.nu + meanMotion(state.satB.orbit.a) * dt) % TWO_PI;
+        // Advance true anomalies — skip whichever satellite is being dragged
+        if (state.dragSat !== 'satA')
+            state.satA.nu = (state.satA.nu + meanMotion(state.satA.orbit.a) * dt) % TWO_PI;
+        if (state.dragSat !== 'satB')
+            state.satB.nu = (state.satB.nu + meanMotion(state.satB.orbit.a) * dt) % TWO_PI;
         state.moon.nu = (state.moon.nu + meanMotion(state.moon.orbit.a) * dt) % TWO_PI;
 
         render();
@@ -1626,6 +1642,9 @@ function render() {
 
     // Time warp indicator
     drawTimeWarp();
+
+    // Solver failure warning (above everything)
+    drawSolverWarning();
 
     updateOverlay();
     updatePanels();
@@ -1754,6 +1773,82 @@ function resetView() {
 }
 
 // ================================================================
+// PHASE 4 HELPERS
+// ================================================================
+
+// ── ToF slider mapping (piecewise: 0→0.1×Hoh, 50→1.0×Hoh, 100→4.0×Hoh) ──
+function sliderToToF(value) {
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const v    = Number(value);
+    const frac = v <= 50
+        ? 0.1 + (v / 50)        * 0.9
+        : 1.0 + ((v - 50) / 50) * 3.0;
+    return hToF * frac;
+}
+
+function toFToSlider(tof) {
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const frac = tof / hToF;
+    return frac <= 1
+        ? ((frac - 0.1) / 0.9) * 50
+        : 50 + ((frac - 1.0) / 3.0) * 50;
+}
+
+function updateToFDisplay(tof) {
+    const hrs = tof / 3600;
+    document.getElementById('tof-display').innerHTML =
+        `${hrs.toFixed(2)}<span class="tof-unit">hrs</span>`;
+}
+
+// ── Satellite hit test — returns 'satA' | 'satB' | null ──
+function hitTestSatellite(cxPx, cyPx) {
+    const HIT_R = 20; // px — generous for easy grabbing
+    for (const key of ['satA', 'satB']) {
+        const sat = state[key];
+        const pos = orbitPos(sat.orbit, sat.nu);
+        const [sx, sy] = worldToCanvas(pos.x, pos.y);
+        if (Math.hypot(cxPx - sx, cyPx - sy) < HIT_R) return key;
+    }
+    return null;
+}
+
+// ── Snap satellite nu to the angle from Earth center toward (wx,wy) ──
+function snapNuToMouse(sat, wx, wy) {
+    let nu = Math.atan2(wy, wx) - sat.orbit.omega;
+    while (nu <  0)       nu += TWO_PI;
+    while (nu >= TWO_PI)  nu -= TWO_PI;
+    return nu;
+}
+
+// ── Solver warning overlay ──
+function drawSolverWarning() {
+    const t = state.transfer;
+    if (t.valid || !t.error) return;
+
+    const msg  = `⚠  ${t.error}`;
+    const padX = 18, padY = 10;
+    ctx.save();
+    ctx.font = 'bold 12px Courier New';
+    const w = ctx.measureText(msg).width + padX * 2;
+    const h = 36;
+    const x = (canvas.width  - w) / 2;
+    const y =  canvas.height - 80;
+
+    ctx.fillStyle   = 'rgba(255,74,106,0.18)';
+    ctx.strokeStyle = 'rgba(255,74,106,0.65)';
+    ctx.lineWidth   = 1;
+    roundRect(ctx, x, y, w, h, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#ff4a6a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(msg, canvas.width / 2, y + h / 2);
+    ctx.restore();
+}
+
+// ================================================================
 // EVENT HANDLERS
 // ================================================================
 
@@ -1774,34 +1869,58 @@ canvas.addEventListener('wheel', (e) => {
     render();
 }, { passive: false });
 
-// Pan start
+// Mousedown — satellite drag takes priority over pan
 canvas.addEventListener('mousedown', (e) => {
-    state.isPanning = true;
-    state.panStart  = {
-        cx: e.offsetX, cy: e.offsetY,
-        camX: state.camera.x, camY: state.camera.y,
-    };
-    canvas.classList.add('panning');
+    const hit = hitTestSatellite(e.offsetX, e.offsetY);
+    if (hit) {
+        state.dragSat = hit;
+        canvas.style.cursor = 'crosshair';
+    } else {
+        state.isPanning = true;
+        state.panStart  = {
+            cx: e.offsetX, cy: e.offsetY,
+            camX: state.camera.x, camY: state.camera.y,
+        };
+        canvas.classList.add('panning');
+    }
 });
 
-// Pan move + coords tracking
+// Mousemove — drag satellite OR pan OR hover
 canvas.addEventListener('mousemove', (e) => {
-    const [wx, wy]    = canvasToWorld(e.offsetX, e.offsetY);
-    state.mouseWorld  = { x: wx, y: wy };
+    const [wx, wy]   = canvasToWorld(e.offsetX, e.offsetY);
+    state.mouseWorld = { x: wx, y: wy };
 
-    if (state.isPanning) {
+    if (state.dragSat) {
+        // Snap satellite to the angle from Earth toward mouse
+        state[state.dragSat].nu = snapNuToMouse(state[state.dragSat], wx, wy);
+        // render() is already called by animLoop; no extra call needed
+        // but call explicitly so it feels instant even at low warp
+        render();
+
+    } else if (state.isPanning) {
         const dx = (e.offsetX - state.panStart.cx) / state.camera.scale;
         const dy = (e.offsetY - state.panStart.cy) / state.camera.scale;
         state.camera.x = state.panStart.camX - dx;
-        state.camera.y = state.panStart.camY + dy; // y-flip
+        state.camera.y = state.panStart.camY + dy;
         render();
+
     } else {
+        // Hover cursor: pointer over satellites, grab over canvas
+        const hit = hitTestSatellite(e.offsetX, e.offsetY);
+        canvas.style.cursor = hit ? 'pointer' : 'grab';
         updateOverlay();
     }
 });
 
-canvas.addEventListener('mouseup',    () => { state.isPanning = false; canvas.classList.remove('panning'); });
-canvas.addEventListener('mouseleave', () => { state.isPanning = false; canvas.classList.remove('panning'); });
+function endInteraction() {
+    state.dragSat     = null;
+    state.isPanning   = false;
+    canvas.style.cursor = 'grab';
+    canvas.classList.remove('panning');
+}
+
+canvas.addEventListener('mouseup',    endInteraction);
+canvas.addEventListener('mouseleave', endInteraction);
 
 // Touch support (pan & pinch)
 let lastTouchDist = null;
@@ -1859,9 +1978,27 @@ document.getElementById('btn-reset-view').addEventListener('click', () => {
     render();
 });
 
-// Hohmann button (placeholder — wired in Phase 4)
+// ── ToF slider ──
+const tofSlider = document.getElementById('tof-slider');
+tofSlider.disabled = false;
+
+tofSlider.addEventListener('input', () => {
+    state.transfer.tof = sliderToToF(tofSlider.value);
+    updateToFDisplay(state.transfer.tof);
+    render();
+});
+
+// ── Hohmann button — snap both satellites to canonical Hohmann positions ──
 document.getElementById('btn-hohmann').addEventListener('click', () => {
-    console.log('[Phase 4] Hohmann snap — not yet implemented');
+    // SAT A at nu=0 (right side), SAT B at nu=π (opposite, on its orbit)
+    state.satA.nu = 0;
+    state.satB.nu = Math.PI;
+
+    // Reset ToF to Hohmann value and slider to centre
+    state.transfer.tof = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    tofSlider.value    = toFToSlider(state.transfer.tof);
+    updateToFDisplay(state.transfer.tof);
+    render();
 });
 
 // Time warp keys:  , = slower   . = faster  (KSP style)
@@ -1934,8 +2071,10 @@ if (document.readyState === 'complete') {
     }
 })();
 
-// Seed transfer ToF with Hohmann default
-state.transfer.tof = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+// Seed transfer ToF with Hohmann default and sync slider
+state.transfer.tof  = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+tofSlider.value     = toFToSlider(state.transfer.tof);
+updateToFDisplay(state.transfer.tof);
 
 // Start animation loop
 requestAnimationFrame(animLoop);
