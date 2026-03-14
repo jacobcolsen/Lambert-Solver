@@ -496,7 +496,7 @@
         <div class="panel">
             <div class="panel-header">
                 <span class="panel-title">ΔV Budget</span>
-                <span class="panel-tag">AWAITING SOLVER</span>
+                <span class="panel-tag" id="dv-panel-tag">AWAITING SOLVER</span>
             </div>
             <div class="dv-row">
                 <span class="dv-label">Δv₁ &nbsp;departure burn</span>
@@ -785,6 +785,103 @@ function vcircular(r) { return Math.sqrt(MU / r); }
 
 // Orbital period (s) from semi-major axis
 function period(a) { return TWO_PI * Math.sqrt(a * a * a / MU); }
+
+// Default Hohmann ToF between two circular orbit radii (half-period of transfer ellipse)
+function hohmannToF(a1, a2) {
+    const at = (a1 + a2) / 2;
+    return Math.PI * Math.sqrt(at * at * at / MU);
+}
+
+// Velocity vector [vx, vy] km/s at true anomaly nu on given orbit (inertial frame)
+function orbitVelocity(orbit, nu) {
+    const { a, e, omega } = orbit;
+    const p  = a * (1 - e * e);
+    const sq = Math.sqrt(MU / p);
+    // Perifocal frame
+    const vpx = -Math.sin(nu) * sq;
+    const vpy = (e + Math.cos(nu)) * sq;
+    // Rotate to inertial frame by omega
+    return [
+        vpx * Math.cos(omega) - vpy * Math.sin(omega),
+        vpx * Math.sin(omega) + vpy * Math.cos(omega),
+    ];
+}
+
+// Derive Keplerian elements {a, e, omega} from position r=[x,y] and velocity v=[vx,vy]
+function stateToOrbit(r, v) {
+    const rmag  = Math.hypot(r[0], r[1]);
+    const vmag2 = v[0]*v[0] + v[1]*v[1];
+    const rdotv = r[0]*v[0] + r[1]*v[1];
+    // Vis-viva → semi-major axis
+    const a = 1 / (2/rmag - vmag2/MU);
+    // Eccentricity vector
+    const ex = (vmag2/MU - 1/rmag)*r[0] - (rdotv/MU)*v[0];
+    const ey = (vmag2/MU - 1/rmag)*r[1] - (rdotv/MU)*v[1];
+    const e  = Math.hypot(ex, ey);
+    // Argument of periapsis
+    const omega = Math.atan2(ey, ex);
+    return { a, e, omega };
+}
+
+// True anomaly of position r on orbit (from angle in inertial frame)
+function posToNU(orbit, r) {
+    let nu = Math.atan2(r[1], r[0]) - orbit.omega;
+    while (nu <  0)       nu += TWO_PI;
+    while (nu >= TWO_PI)  nu -= TWO_PI;
+    return nu;
+}
+
+// ================================================================
+// TRANSFER COMPUTATION
+// ================================================================
+
+function computeTransfer() {
+    const posA = orbitPos(state.satA.orbit, state.satA.nu);
+    const posB = orbitPos(state.satB.orbit, state.satB.nu);
+    const r1   = [posA.x, posA.y];
+    const r2   = [posB.x, posB.y];
+
+    // ToF: use stored value (set by slider in Phase 4) or Hohmann default
+    const tof = (state.transfer.tof !== null)
+        ? state.transfer.tof
+        : hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+
+    const sol = lambertSolve(r1, r2, tof, true);
+
+    if (!sol.converged || !sol.v1) {
+        state.transfer.valid = false;
+        state.transfer.error = (sol.debug && sol.debug.error) || 'No solution';
+        return;
+    }
+
+    // Transfer orbit elements from departure state vector
+    const xferOrbit = stateToOrbit(r1, sol.v1);
+
+    // Current satellite velocity vectors
+    const vA = orbitVelocity(state.satA.orbit, state.satA.nu);
+    const vB = orbitVelocity(state.satB.orbit, state.satB.nu);
+
+    // ΔV vectors (km/s)
+    const dv1 = [sol.v1[0] - vA[0], sol.v1[1] - vA[1]];
+    const dv2 = [vB[0] - sol.v2[0], vB[1] - sol.v2[1]];
+
+    Object.assign(state.transfer, {
+        valid:       true,
+        error:       null,
+        orbit:       xferOrbit,
+        v1:          sol.v1,
+        v2:          sol.v2,
+        dv1,  dv2,
+        dv1mag:      Math.hypot(dv1[0], dv1[1]) * 1000,  // m/s
+        dv2mag:      Math.hypot(dv2[0], dv2[1]) * 1000,
+        tof,
+        r1, r2,
+        vsat1:       vA,
+        vsat2:       vB,
+        solverIters: sol.iters,
+        solverDebug: sol.debug,
+    });
+}
 
 // ================================================================
 // LAMBERT SOLVER  (Bate / Mueller / White universal variable method)
@@ -1244,6 +1341,131 @@ function drawScaleBar() {
 }
 
 // ================================================================
+// TRANSFER VISUALIZATION
+// ================================================================
+
+/**
+ * Draw an arrow from world point (x0w,y0w) to (x1w,y1w).
+ * headSizePx defaults to 10.
+ */
+function drawArrow(x0w, y0w, x1w, y1w, color, lineWidthPx, headSizePx) {
+    const [x0, y0] = worldToCanvas(x0w, y0w);
+    const [x1, y1] = worldToCanvas(x1w, y1w);
+    const dx  = x1 - x0;
+    const dy  = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    if (len < 3) return;
+
+    const head  = Math.min(headSizePx || 10, len * 0.45);
+    const angle = Math.atan2(dy, dx);
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle   = color;
+    ctx.lineWidth   = lineWidthPx || 1.5;
+    ctx.lineCap     = 'round';
+
+    // Shaft (stop short of tip so head doesn't overlap)
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1 - Math.cos(angle) * head * 0.75,
+               y1 - Math.sin(angle) * head * 0.75);
+    ctx.stroke();
+
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - head * Math.cos(angle - 0.38),
+               y1 - head * Math.sin(angle - 0.38));
+    ctx.lineTo(x1 - head * Math.cos(angle + 0.38),
+               y1 - head * Math.sin(angle + 0.38));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+/**
+ * Draw all transfer-orbit visuals: ellipse arc, ΔV arrows, velocity triangle.
+ * Zoom-invariant arrow lengths: DV_PX px per km/s, VEL_PX px per km/s.
+ */
+function drawTransfer() {
+    const t = state.transfer;
+    if (!t.valid) return;
+
+    const orb = t.orbit;
+    const sc  = state.camera.scale;
+
+    // World-units per km/s for each arrow class (zoom-invariant screen size)
+    const DV_WORLD  = 80  / sc;   // ΔV arrows:  80 px / (km/s)
+    const VEL_WORLD = 11  / sc;   // full-v arrows: 11 px / (km/s)
+
+    // ── Full transfer ellipse (faint dashed) ──
+    drawOrbit(orb, 'rgba(255,215,0,0.20)', 1, [5, 7]);
+
+    // ── Transfer arc r1→r2 (solid gold) ──
+    const nu1 = posToNU(orb, t.r1);
+    const nu2 = posToNU(orb, t.r2);
+    let   arc = nu2 - nu1;
+    if (arc <= 0) arc += TWO_PI;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth   = 2.5;
+    ctx.shadowColor = 'rgba(255,215,0,0.5)';
+    ctx.shadowBlur  = 8;
+    const ARC_STEPS = 400;
+    for (let i = 0; i <= ARC_STEPS; i++) {
+        const nu  = nu1 + (i / ARC_STEPS) * arc;
+        const pos = orbitPos(orb, nu);
+        const [cx, cy] = worldToCanvas(pos.x, pos.y);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // ── Departure marker ──
+    const [d1cx, d1cy] = worldToCanvas(t.r1[0], t.r1[1]);
+    ctx.beginPath();
+    ctx.arc(d1cx, d1cy, 5, 0, TWO_PI);
+    ctx.fillStyle = '#ffd700';
+    ctx.fill();
+
+    // ── Arrival marker ──
+    const [d2cx, d2cy] = worldToCanvas(t.r2[0], t.r2[1]);
+    ctx.beginPath();
+    ctx.arc(d2cx, d2cy, 5, 0, TWO_PI);
+    ctx.fillStyle = '#ff4a6a';
+    ctx.fill();
+
+    // ── Velocity vector triangle at departure ──
+    // Vectors originate at SAT A position.
+    // v_sat1 (cyan), v_transfer1 (gold), ΔV1 = difference (green)
+    const vs1e = [t.r1[0] + t.vsat1[0] * VEL_WORLD,
+                  t.r1[1] + t.vsat1[1] * VEL_WORLD];
+    const vt1e = [t.r1[0] + t.v1[0]    * VEL_WORLD,
+                  t.r1[1] + t.v1[1]    * VEL_WORLD];
+
+    drawArrow(t.r1[0], t.r1[1], vs1e[0], vs1e[1],
+              state.satA.color + 'cc', 1.5, 7);           // v_sat1 cyan
+    drawArrow(t.r1[0], t.r1[1], vt1e[0], vt1e[1],
+              'rgba(255,215,0,0.85)', 1.5, 7);             // v_transfer1 gold
+    drawArrow(vs1e[0], vs1e[1], vt1e[0], vt1e[1],
+              '#4aed88', 2, 8);                             // ΔV1 green (tip-to-tip)
+
+    // ── ΔV arrows at departure and arrival ──
+    // ΔV1 also shown as standalone arrow from satellite (scaled separately)
+    const dv1e = [t.r1[0] + t.dv1[0] * DV_WORLD,
+                  t.r1[1] + t.dv1[1] * DV_WORLD];
+    const dv2e = [t.r2[0] + t.dv2[0] * DV_WORLD,
+                  t.r2[1] + t.dv2[1] * DV_WORLD];
+
+    drawArrow(t.r1[0], t.r1[1], dv1e[0], dv1e[1], '#4aed88', 2.5, 11);  // Δv1 green
+    drawArrow(t.r2[0], t.r2[1], dv2e[0], dv2e[1], '#ff4a6a', 2.5, 11);  // Δv2 red
+}
+
+// ================================================================
 // TIME WARP INDICATOR
 // ================================================================
 function drawTimeWarp() {
@@ -1366,6 +1588,9 @@ function animLoop(timestamp) {
 // MAIN RENDER
 // ================================================================
 function render() {
+    // Recompute transfer for current satellite positions every frame
+    computeTransfer();
+
     drawBackground();
     drawStars();
     drawCrosshair();
@@ -1376,6 +1601,9 @@ function render() {
     // Satellite orbits
     drawOrbit(state.satA.orbit, state.satA.color + '50', 1.5);
     drawOrbit(state.satB.orbit, state.satB.color + '50', 1.5);
+
+    // Transfer orbit + ΔV arrows (behind Moon and Earth)
+    drawTransfer();
 
     // Moon (behind Earth)
     drawMoon();
@@ -1389,7 +1617,7 @@ function render() {
     drawOrbitLabel(state.satB.orbit, Math.PI * 1.75,
         `${(state.satB.orbit.a - EARTH_RADIUS).toFixed(0)} km`, state.satB.color);
 
-    // Satellites
+    // Satellites (on top of everything)
     drawSatellite(state.satA);
     drawSatellite(state.satB);
 
@@ -1400,25 +1628,62 @@ function render() {
     drawTimeWarp();
 
     updateOverlay();
+    updatePanels();
 }
 
 // ================================================================
 // PANEL UPDATES
 // ================================================================
-function updateOrbitPanel() {
+// Throttle panel DOM updates — no need to update at 60fps
+let _panelFrame = 0;
+function updatePanels() {
+    if (++_panelFrame % 3 !== 0) return; // update every 3rd frame (~20fps)
+
     const a1 = state.satA.orbit.a;
     const a3 = state.satB.orbit.a;
-    const T1 = period(a1) / 60;
-    const T3 = period(a3) / 60;
 
-    document.getElementById('op-a1').textContent = a1.toLocaleString('en', {maximumFractionDigits: 0});
+    // Departure orbit
+    document.getElementById('op-a1').textContent = Math.round(a1).toLocaleString('en');
     document.getElementById('op-e1').textContent = state.satA.orbit.e.toFixed(3);
-    document.getElementById('op-T1').textContent = T1.toFixed(1);
+    document.getElementById('op-T1').textContent = (period(a1) / 60).toFixed(1);
 
-    document.getElementById('op-a3').textContent = a3.toLocaleString('en', {maximumFractionDigits: 0});
+    // Arrival orbit
+    document.getElementById('op-a3').textContent = Math.round(a3).toLocaleString('en');
     document.getElementById('op-e3').textContent = state.satB.orbit.e.toFixed(3);
-    document.getElementById('op-T3').textContent = T3.toFixed(1);
+    document.getElementById('op-T3').textContent = (period(a3) / 60).toFixed(1);
+
+    const t = state.transfer;
+    if (t.valid) {
+        const orb = t.orbit;
+
+        // Transfer orbit row
+        document.getElementById('op-a2').textContent = Math.round(orb.a).toLocaleString('en');
+        document.getElementById('op-e2').textContent = orb.e.toFixed(3);
+        document.getElementById('op-T2').textContent = (t.tof / 60).toFixed(1); // actual ToF
+
+        // ΔV budget
+        document.getElementById('dv1').textContent    = t.dv1mag.toFixed(1) + ' m/s';
+        document.getElementById('dv2').textContent    = t.dv2mag.toFixed(1) + ' m/s';
+        document.getElementById('dvtot').textContent  = (t.dv1mag + t.dv2mag).toFixed(1) + ' m/s';
+        document.getElementById('dv-panel-tag').textContent   = 'LIVE';
+        document.getElementById('dv-panel-tag').style.color   = 'var(--green)';
+        document.getElementById('dv-panel-tag').style.borderColor = 'var(--green)';
+    } else {
+        document.getElementById('op-a2').textContent = '—';
+        document.getElementById('op-e2').textContent = '—';
+        document.getElementById('op-T2').textContent = '—';
+        const errMsg = t.error || '—';
+        document.getElementById('dv1').innerHTML   = `<span class="pending-val">${errMsg}</span>`;
+        document.getElementById('dv2').innerHTML   = `<span class="pending-val">—</span>`;
+        document.getElementById('dvtot').innerHTML = `<span class="pending-val">—</span>`;
+        document.getElementById('dv-panel-tag').textContent = 'NO SOLUTION';
+        document.getElementById('dv-panel-tag').style.color = 'var(--red)';
+        document.getElementById('dv-panel-tag').style.borderColor = 'var(--red)';
+    }
 }
+
+// Keep the old name as alias for the init call below
+function updateOrbitPanel() { updatePanels(); }
 
 function updateOverlay() {
     // Compute zoom relative to initial "fit" scale
@@ -1668,6 +1933,9 @@ if (document.readyState === 'complete') {
         });
     }
 })();
+
+// Seed transfer ToF with Hohmann default
+state.transfer.tof = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
 
 // Start animation loop
 requestAnimationFrame(animLoop);
