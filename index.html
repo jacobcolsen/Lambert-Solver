@@ -426,14 +426,121 @@
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: var(--bg); }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* ── Math Walkthrough expand button ── */
+        .expand-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-family: inherit;
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            padding: 2px 8px;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: border-color 0.2s, color 0.2s;
+        }
+        .expand-btn:hover { border-color: var(--sat-a); color: var(--sat-a); }
+
+        /* ── Math panel body ── */
+        .math-body  { padding-top: 2px; }
+        .math-step  { margin-bottom: 10px; }
+        .step-label {
+            font-size: 9px;
+            color: var(--text-dim);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .math-pending { font-size: 11px; color: var(--text-dim); font-style: italic; }
+        .step-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 1px 0;
+            font-size: 11px;
+        }
+        .step-var { color: var(--text-dim); }
+        .step-num { color: var(--text-bright); font-variant-numeric: tabular-nums; }
+
+        /* ── Newton-Raphson iteration table ── */
+        .iter-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            margin-top: 4px;
+        }
+        .iter-table th {
+            color: var(--text-dim);
+            text-align: right;
+            padding: 2px 3px;
+            font-weight: normal;
+            border-bottom: 1px solid var(--border);
+        }
+        .iter-table th:first-child { text-align: center; }
+        .iter-table td {
+            color: var(--text);
+            text-align: right;
+            padding: 2px 3px;
+            font-variant-numeric: tabular-nums;
+        }
+        .iter-table td:first-child { text-align: center; color: var(--text-dim); }
+        .iter-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+        .iter-converged { font-size: 10px; color: var(--green); margin-top: 4px; }
+
+        /* ── Hohmann callout ── */
+        .hohmann-callout {
+            background: rgba(255,215,0,0.07);
+            border: 1px solid rgba(255,215,0,0.4);
+            border-radius: 3px;
+            padding: 8px 10px;
+            font-size: 10px;
+            color: #ffd700;
+            letter-spacing: 0.3px;
+            line-height: 1.5;
+            margin-top: 10px;
+            display: none;
+        }
+        .hohmann-callout .hoh-star { font-size: 13px; margin-right: 4px; }
+
+        /* ── Tooltips ── */
+        .has-tip {
+            border-bottom: 1px dashed rgba(160,180,210,0.35);
+            cursor: help;
+        }
+        #tooltip-popup {
+            position: fixed;
+            background: #10102a;
+            border: 1px solid var(--border-bright);
+            border-radius: 4px;
+            padding: 7px 11px;
+            font-size: 11px;
+            color: var(--text);
+            max-width: 210px;
+            line-height: 1.5;
+            pointer-events: none;
+            z-index: 9999;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+
+        /* ── ΔV vs ToF chart ── */
+        #dv-tof-canvas {
+            display: block;
+            width: 100%;
+            height: 130px;
+        }
+        .chart-note { display: none; }
     </style>
 </head>
 <body>
 
+<div id="tooltip-popup"></div>
+
 <!-- ════════════════ HEADER ════════════════ -->
 <div id="header">
     <h1>LAMBERT SOLVER</h1>
-    <div class="badge">PHASE 3</div>
+    <div class="badge">PHASE 5</div>
     <div class="subtitle">EARTH-CENTERED · 2D ORBITAL TRANSFER · PROGRADE</div>
 </div>
 
@@ -520,24 +627,27 @@
             </div>
             <div id="math-body" class="math-body" style="display:none;">
                 <div class="math-step">
-                    <div class="step-label">Step 1 — Inputs</div>
-                    <div class="step-content math-pending">r₁, r₂ positions · time of flight</div>
+                    <div class="step-label">① Inputs</div>
+                    <div id="ms1"><span class="math-pending">Run solver to see values</span></div>
                 </div>
                 <div class="math-step">
-                    <div class="step-label">Step 2 — Geometry</div>
-                    <div class="step-content math-pending">chord c · semi-perimeter s · transfer angle Δθ</div>
+                    <div class="step-label">② Geometry</div>
+                    <div id="ms2"><span class="math-pending">chord · semi-perimeter · A</span></div>
                 </div>
                 <div class="math-step">
-                    <div class="step-label">Step 3 — Universal Variable z</div>
-                    <div class="step-content math-pending">Newton-Raphson on F(z) = 0<br>using Stumpff C(z), S(z)</div>
+                    <div class="step-label">③ Newton-Raphson convergence</div>
+                    <div id="ms3"><span class="math-pending">z via Stumpff C(z), S(z)</span></div>
                 </div>
                 <div class="math-step">
-                    <div class="step-label">Step 4 — Lagrange Coefficients</div>
-                    <div class="step-content math-pending">f, g, ḟ, ġ → v₁, v₂</div>
+                    <div class="step-label">④ Lagrange coefficients</div>
+                    <div id="ms4"><span class="math-pending">f · g · ġ → v₁, v₂</span></div>
                 </div>
                 <div class="math-step">
-                    <div class="step-label">Step 5 — Outputs</div>
-                    <div class="step-content math-pending">v₁, v₂ · Δv₁, Δv₂ · transfer orbit elements</div>
+                    <div class="step-label">⑤ Outputs</div>
+                    <div id="ms5"><span class="math-pending">v₁ · v₂ · Δv</span></div>
+                </div>
+                <div id="hohmann-callout" class="hohmann-callout">
+                    <span class="hoh-star">★</span>This is a Hohmann Transfer — the minimum-energy solution for these orbits
                 </div>
             </div>
         </div>
@@ -982,6 +1092,7 @@ function lambertSolve(r1, r2, tof, prograde = true) {
     let converged = false;
     let iters     = 0;
     let t_curr    = NaN;
+    const iterLog = []; // capture up to 8 iterations for math panel
 
     for (let i = 0; i < ITER; i++) {
         t_curr = tofAtZ(z);
@@ -990,6 +1101,11 @@ function lambertSolve(r1, r2, tof, prograde = true) {
         if (isNaN(t_curr)) { z -= 0.2; continue; }
 
         const F = t_curr - tof;
+        if (iterLog.length < 8) {
+            const Ci = stumpffC(z), Si = stumpffS(z);
+            const yi = r1mag + r2mag + A * (z * Si - 1) / Math.sqrt(Ci);
+            iterLog.push({ iter: iterLog.length + 1, z, Cz: Ci, Sz: Si, yz: yi, Fz: F });
+        }
         if (Math.abs(F) < TOL) { converged = true; iters = i + 1; break; }
 
         // Numerical central-difference derivative dt/dz
@@ -1011,7 +1127,7 @@ function lambertSolve(r1, r2, tof, prograde = true) {
 
     if (!converged) {
         return { v1: null, v2: null, converged: false, iters,
-                 debug: { z, t: t_curr, tof, error: 'Did not converge' } };
+                 debug: { z, t: t_curr, tof, error: 'Did not converge', A, iterations: iterLog } };
     }
 
     // Lagrange coefficients
@@ -1034,7 +1150,7 @@ function lambertSolve(r1, r2, tof, prograde = true) {
     ];
 
     return { v1, v2, converged, iters,
-             debug: { z, y, f, g, gdot, C, S, dnu: dnu * 180/Math.PI } };
+             debug: { z, y, f, g, gdot, C, S, dnu: dnu * 180/Math.PI, A, iterations: iterLog } };
 }
 
 // ================================================================
@@ -1716,6 +1832,14 @@ function updatePanels() {
         document.getElementById('dv-panel-tag').style.color = 'var(--red)';
         document.getElementById('dv-panel-tag').style.borderColor = 'var(--red)';
     }
+
+    // Math walkthrough (only when body is visible — avoids wasted DOM work)
+    if (document.getElementById('math-body').style.display !== 'none') {
+        updateMathPanel();
+    }
+
+    // ΔV vs ToF chart
+    drawDvTofChart();
 }
 
 // Keep the old name as alias for the init call below
@@ -1733,51 +1857,293 @@ function updateOverlay() {
 }
 
 // ================================================================
-// CHART CANVAS PLACEHOLDER
+// PHASE 5 — MATH WALKTHROUGH, HOHMANN DETECTION, CHART
 // ================================================================
-function drawChartPlaceholder() {
-    const c = document.getElementById('dv-tof-canvas');
-    // Set pixel size from layout size
-    const rect = c.getBoundingClientRect();
-    c.width  = rect.width  || 308;
-    c.height = rect.height || 130;
 
-    const cx = c.getContext('2d');
-    cx.fillStyle = '#0a0a20';
-    cx.fillRect(0, 0, c.width, c.height);
+// ── Expand / collapse math panel ──
+document.getElementById('math-btn').addEventListener('click', () => {
+    const body = document.getElementById('math-body');
+    const btn  = document.getElementById('math-btn');
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    btn.textContent    = open ? 'EXPAND' : 'COLLAPSE';
+});
 
-    // Placeholder axes
-    cx.strokeStyle = '#1a2540';
-    cx.lineWidth   = 1;
-    cx.beginPath();
-    cx.moveTo(28, 10); cx.lineTo(28, c.height - 20);
-    cx.lineTo(c.width - 10, c.height - 20);
-    cx.stroke();
-
-    // Placeholder curve (rough U shape to hint at shape)
-    cx.beginPath();
-    cx.moveTo(30, c.height - 22);
-    const pts = 60;
-    for (let i = 0; i <= pts; i++) {
-        const t  = i / pts;
-        const yCurve = 0.8 + 3.5 * (t - 0.28) * (t - 0.28); // parabola hint
-        const px = 30 + t * (c.width - 42);
-        const py = (c.height - 22) - Math.min(yCurve * 18, c.height - 34);
-        i === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py);
-    }
-    cx.strokeStyle = '#2a3a60';
-    cx.lineWidth   = 1.5;
-    cx.setLineDash([3, 3]);
-    cx.stroke();
-    cx.setLineDash([]);
-
-    cx.font      = '9px Courier New';
-    cx.fillStyle = '#2a3a60';
-    cx.textAlign = 'left';
-    cx.fillText('ΔV (m/s)', 30, 10);
-    cx.textAlign = 'center';
-    cx.fillText('TIME OF FLIGHT', c.width / 2, c.height - 5);
+// ── Detect approximate Hohmann transfer ──
+function isHohmannTransfer() {
+    const t = state.transfer;
+    if (!t.valid) return false;
+    const db  = t.solverDebug;
+    const eA  = state.satA.orbit.e;
+    const eB  = state.satB.orbit.e;
+    const near180 = (db && db.special === 'near-Hohmann analytical') ||
+                    (db && typeof db.dnu === 'number' && Math.abs(db.dnu - 180) < 1.5);
+    const circular = eA < 0.02 && eB < 0.02;
+    const hToF     = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const onTime   = t.tof / hToF > 0.96 && t.tof / hToF < 1.04;
+    return near180 && circular && onTime;
 }
+
+// ── Helper: build one step-row HTML line ──
+function srow(label, value, tip) {
+    const tipAttr = tip ? ` class="has-tip" data-tip="${tip}"` : '';
+    return `<div class="step-row"><span class="step-var"${tipAttr}>${label}</span><span class="step-num">${value}</span></div>`;
+}
+
+// ── Update math walkthrough panel ──
+function updateMathPanel() {
+    const t  = state.transfer;
+    const db = t.solverDebug;
+
+    if (!t.valid || !db) {
+        ['ms1','ms2','ms3','ms4','ms5'].forEach(id => {
+            document.getElementById(id).innerHTML = '<span class="math-pending">—</span>';
+        });
+        document.getElementById('hohmann-callout').style.display = 'none';
+        return;
+    }
+
+    const r1mag = Math.hypot(t.r1[0], t.r1[1]);
+    const r2mag = Math.hypot(t.r2[0], t.r2[1]);
+    const dnuDeg = typeof db.dnu === 'number' ? db.dnu.toFixed(2) + '°' : '180.00° (analytical)';
+
+    // ① Inputs
+    document.getElementById('ms1').innerHTML =
+        srow('|r₁|', r1mag.toFixed(1) + ' km') +
+        srow('|r₂|', r2mag.toFixed(1) + ' km') +
+        srow('Δθ',   dnuDeg) +
+        srow('ToF',  (t.tof / 3600).toFixed(4) + ' hr');
+
+    // ② Geometry
+    const chord = Math.hypot(t.r2[0]-t.r1[0], t.r2[1]-t.r1[1]);
+    const semi  = (r1mag + r2mag + chord) / 2;
+    const Aval  = typeof db.A === 'number' ? db.A.toFixed(1) + ' km' : '—';
+    document.getElementById('ms2').innerHTML =
+        srow('chord c', chord.toFixed(1) + ' km') +
+        srow('semi-perim s', semi.toFixed(1) + ' km') +
+        srow('<span class="has-tip" data-tip="Geometric parameter: A = sin(Δθ)·√(r₁r₂/(1−cos Δθ)). Encodes the transfer geometry; drives the Newton-Raphson target function.">A</span>',
+             Aval);
+
+    // ③ Newton-Raphson iterations
+    if (db.special === 'near-Hohmann analytical') {
+        document.getElementById('ms3').innerHTML =
+            '<span class="math-pending">Solved analytically — transfer angle ≈ 180°; iterative z skipped.</span>';
+    } else if (db.iterations && db.iterations.length) {
+        let html = `<table class="iter-table"><thead><tr>
+            <th>#</th>
+            <th><span class="has-tip" data-tip="Universal variable z = αχ², where α = 1/a (semi-major axis reciprocal) and χ is the universal variable. z > 0 → elliptic, z = 0 → parabolic, z < 0 → hyperbolic.">z</span></th>
+            <th><span class="has-tip" data-tip="Stumpff function C(z) = (1 − cos√z)/z. Generalises the cosine series to any orbit type. At z=0, C=½.">C(z)</span></th>
+            <th><span class="has-tip" data-tip="Stumpff function S(z) = (√z − sin√z)/z^(3/2). Generalises the sine series. At z=0, S=⅙.">S(z)</span></th>
+            <th>F(z)</th>
+        </tr></thead><tbody>`;
+        for (const it of db.iterations) {
+            html += `<tr><td>${it.iter}</td><td>${it.z.toFixed(5)}</td><td>${it.Cz.toFixed(5)}</td><td>${it.Sz.toFixed(5)}</td><td>${it.Fz.toExponential(2)}</td></tr>`;
+        }
+        html += `</tbody></table><div class="iter-converged">✓ converged in ${t.solverIters} iteration${t.solverIters === 1 ? '' : 's'}</div>`;
+        document.getElementById('ms3').innerHTML = html;
+    } else {
+        document.getElementById('ms3').innerHTML = '<span class="math-pending">—</span>';
+    }
+
+    // ④ Lagrange coefficients
+    const { f, g, gdot, z: zFinal, y: yFinal } = db;
+    document.getElementById('ms4').innerHTML =
+        srow('<span class="has-tip" data-tip="Lagrange f: f = 1 − y/|r₁|. Dimensionless scalar that propagates r₁ forward to r₂ without integrating the full EOM.">f</span>',
+             typeof f === 'number' ? f.toFixed(7) : '—') +
+        srow('<span class="has-tip" data-tip="Lagrange g: g = A·√(y/μ), units of seconds. Together with f, gives: r₂ = f·r₁ + g·v₁.">g</span>',
+             typeof g === 'number' ? g.toFixed(2) + ' s' : '—') +
+        srow('<span class="has-tip" data-tip="Lagrange ġ: ġ = 1 − y/|r₂|. Used to recover v₂: v₂ = (ġ·r₂ − r₁)/g.">ġ</span>',
+             typeof gdot === 'number' ? gdot.toFixed(7) : '—') +
+        srow('z*', typeof zFinal === 'number' ? zFinal.toFixed(6) : '—') +
+        srow('y*', typeof yFinal === 'number' ? yFinal.toFixed(1) + ' km' : '—');
+
+    // ⑤ Outputs
+    const v1 = t.v1, v2 = t.v2;
+    document.getElementById('ms5').innerHTML =
+        srow('v₁', `[${v1[0].toFixed(3)}, ${v1[1].toFixed(3)}] km/s`) +
+        srow('v₂', `[${v2[0].toFixed(3)}, ${v2[1].toFixed(3)}] km/s`) +
+        srow('<span class="has-tip" data-tip="Departure burn Δv₁: difference between transfer-orbit velocity and circular-orbit velocity at r₁. Applied prograde to begin the transfer.">Δv₁</span>',
+             t.dv1mag.toFixed(1) + ' m/s') +
+        srow('<span class="has-tip" data-tip="Arrival burn Δv₂: difference between circular-orbit velocity and transfer-orbit velocity at r₂. Applied prograde to circularise into the destination orbit.">Δv₂</span>',
+             t.dv2mag.toFixed(1) + ' m/s');
+
+    // Hohmann callout
+    document.getElementById('hohmann-callout').style.display =
+        isHohmannTransfer() ? 'block' : 'none';
+
+    // Re-attach tooltip listeners for dynamically added elements
+    attachTipListeners();
+}
+
+// ── Tooltip system ──
+const tipEl = document.getElementById('tooltip-popup');
+
+function attachTipListeners() {
+    document.querySelectorAll('.has-tip:not([data-tip-bound])').forEach(el => {
+        el.setAttribute('data-tip-bound', '1');
+        el.addEventListener('mouseenter', (e) => {
+            tipEl.textContent = el.dataset.tip;
+            tipEl.style.display = 'block';
+            positionTip(e);
+        });
+        el.addEventListener('mousemove', positionTip);
+        el.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+    });
+}
+
+function positionTip(e) {
+    const x = e.clientX + 14;
+    const y = e.clientY - 8;
+    tipEl.style.left = Math.min(x, window.innerWidth - 224) + 'px';
+    tipEl.style.top  = y + 'px';
+}
+
+// ── ΔV vs ToF chart ──
+let _dvCurveDirty = true;
+let _dvCurve      = null;
+
+function markDvCurveDirty() { _dvCurveDirty = true; }
+
+function buildDvCurve() {
+    const N    = 70;
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const r1   = state.transfer.r1 || (() => { const p = orbitPos(state.satA.orbit, state.satA.nu); return [p.x, p.y]; })();
+    const r2   = state.transfer.r2 || (() => { const p = orbitPos(state.satB.orbit, state.satB.nu); return [p.x, p.y]; })();
+    const tMin = hToF * 0.12;
+    const tMax = hToF * 4.0;
+    const pts  = [];
+    for (let i = 0; i <= N; i++) {
+        const tof = tMin + (tMax - tMin) * (i / N);
+        const sol = lambertSolve(r1, r2, tof, true);
+        if (sol.converged && sol.v1) {
+            const vA  = orbitVelocity(state.satA.orbit, state.satA.nu);
+            const vB  = orbitVelocity(state.satB.orbit, state.satB.nu);
+            const dv1 = Math.hypot(sol.v1[0]-vA[0], sol.v1[1]-vA[1]) * 1000;
+            const dv2 = Math.hypot(vB[0]-sol.v2[0], vB[1]-sol.v2[1]) * 1000;
+            pts.push({ tof, dv: dv1 + dv2 });
+        } else {
+            pts.push({ tof, dv: null });
+        }
+    }
+    return pts;
+}
+
+function drawDvTofChart() {
+    const chartCanvas = document.getElementById('dv-tof-canvas');
+    if (!chartCanvas) return;
+    const rect = chartCanvas.getBoundingClientRect();
+    chartCanvas.width  = Math.round(rect.width)  || 308;
+    chartCanvas.height = Math.round(rect.height) || 130;
+    const cw = chartCanvas.width, ch = chartCanvas.height;
+    const cc = chartCanvas.getContext('2d');
+
+    if (_dvCurveDirty) { _dvCurve = buildDvCurve(); _dvCurveDirty = false; }
+
+    const pts   = _dvCurve;
+    const valid = pts.filter(p => p.dv !== null);
+
+    // Clear
+    cc.fillStyle = '#080816';
+    cc.fillRect(0, 0, cw, ch);
+
+    if (!valid.length) {
+        cc.font = '10px Courier New'; cc.fillStyle = '#2a3a60';
+        cc.textAlign = 'center'; cc.fillText('No solution data', cw/2, ch/2);
+        return;
+    }
+
+    const PAD  = { l: 44, r: 12, t: 12, b: 26 };
+    const pw   = cw - PAD.l - PAD.r;
+    const ph   = ch - PAD.t - PAD.b;
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const tMin = pts[0].tof, tMax = pts[pts.length-1].tof;
+    const dvMin = Math.min(...valid.map(p => p.dv));
+    const dvMax = Math.max(...valid.map(p => p.dv));
+    const dvSpan = dvMax - dvMin || 1;
+
+    const toX  = tof => PAD.l + pw * (tof - tMin) / (tMax - tMin);
+    const toY  = dv  => PAD.t + ph * (1 - (dv - dvMin) / dvSpan);
+
+    // Grid
+    cc.strokeStyle = 'rgba(26,37,64,0.9)'; cc.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const gy = PAD.t + ph * i / 4;
+        cc.beginPath(); cc.moveTo(PAD.l, gy); cc.lineTo(PAD.l + pw, gy); cc.stroke();
+    }
+
+    // Axes
+    cc.strokeStyle = 'rgba(74,96,128,0.7)'; cc.lineWidth = 1;
+    cc.beginPath();
+    cc.moveTo(PAD.l, PAD.t); cc.lineTo(PAD.l, PAD.t + ph); cc.lineTo(PAD.l + pw, PAD.t + ph);
+    cc.stroke();
+
+    // Y-axis labels
+    cc.font = '9px Courier New'; cc.fillStyle = 'rgba(74,96,128,0.9)';
+    cc.textAlign = 'right'; cc.textBaseline = 'middle';
+    for (let i = 0; i <= 4; i++) {
+        const dv = dvMax - dvSpan * (i / 4);
+        cc.fillText(Math.round(dv), PAD.l - 4, PAD.t + ph * (i / 4));
+    }
+
+    // X-axis tick labels (multiples of Hohmann)
+    cc.textAlign = 'center'; cc.textBaseline = 'top';
+    for (const f of [0.5, 1, 2, 3, 4]) {
+        const tx = hToF * f;
+        if (tx < tMin || tx > tMax) continue;
+        const gx = toX(tx);
+        cc.fillText((tx/3600).toFixed(1)+'h', gx, PAD.t + ph + 5);
+        cc.strokeStyle = 'rgba(40,60,90,0.5)';
+        cc.beginPath(); cc.moveTo(gx, PAD.t); cc.lineTo(gx, PAD.t + ph); cc.stroke();
+    }
+
+    // Axis titles
+    cc.font = '8px Courier New'; cc.fillStyle = 'rgba(74,96,128,0.7)';
+    cc.textAlign = 'right'; cc.textBaseline = 'bottom';
+    cc.fillText('m/s', PAD.l - 2, PAD.t);
+    cc.textAlign = 'right'; cc.textBaseline = 'bottom';
+    cc.fillText('ToF', PAD.l + pw, PAD.t + ph + ph);
+
+    // Hohmann dashed vertical
+    if (hToF >= tMin && hToF <= tMax) {
+        const hx = toX(hToF);
+        cc.save();
+        cc.strokeStyle = 'rgba(255,215,0,0.3)'; cc.lineWidth = 1;
+        cc.setLineDash([3,4]);
+        cc.beginPath(); cc.moveTo(hx, PAD.t); cc.lineTo(hx, PAD.t + ph); cc.stroke();
+        cc.setLineDash([]);
+        cc.font = '8px Courier New'; cc.fillStyle = 'rgba(255,215,0,0.5)';
+        cc.textAlign = 'center'; cc.textBaseline = 'top';
+        cc.fillText('HOH', hx, PAD.t + 1);
+        cc.restore();
+    }
+
+    // Curve
+    cc.beginPath();
+    cc.strokeStyle = '#ffd700'; cc.lineWidth = 1.5;
+    let first = true;
+    for (const p of pts) {
+        if (p.dv === null) { first = true; continue; }
+        const x = toX(p.tof), y = toY(p.dv);
+        first ? (cc.moveTo(x, y), first = false) : cc.lineTo(x, y);
+    }
+    cc.stroke();
+
+    // Current ToF dot
+    if (state.transfer.valid && state.transfer.tof) {
+        const cx = toX(state.transfer.tof);
+        const cy = toY(state.transfer.dv1mag + state.transfer.dv2mag);
+        if (cx >= PAD.l && cx <= PAD.l + pw) {
+            cc.beginPath();
+            cc.arc(cx, cy, 4.5, 0, Math.PI * 2);
+            cc.fillStyle    = '#00d4ff';
+            cc.shadowColor  = 'rgba(0,212,255,0.7)';
+            cc.shadowBlur   = 8;
+            cc.fill();
+            cc.shadowBlur = 0;
+        }
+    }
+}
+
 
 // ================================================================
 // VIEW RESET
@@ -1994,6 +2360,7 @@ canvas.addEventListener('mousemove', (e) => {
     if (state.dragSat) {
         // Snap satellite to the angle from Earth toward mouse
         state[state.dragSat].nu = snapNuToMouse(state[state.dragSat], wx, wy);
+        markDvCurveDirty();
         render();
 
     } else if (state.dragOrbit) {
@@ -2005,6 +2372,7 @@ canvas.addEventListener('mousemove', (e) => {
         // Rescale ToF to preserve the same fraction of Hohmann time
         state.transfer.tof = sliderToToF(tofSlider.value);
         updateToFDisplay(state.transfer.tof);
+        markDvCurveDirty();
         render();
 
     } else if (state.isPanning) {
@@ -2110,6 +2478,7 @@ document.getElementById('btn-hohmann').addEventListener('click', () => {
     state.transfer.tof = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
     tofSlider.value    = toFToSlider(state.transfer.tof);
     updateToFDisplay(state.transfer.tof);
+    markDvCurveDirty();
     render();
 });
 
@@ -2132,18 +2501,18 @@ updateOrbitPanel();
 // Wait for layout to settle before sizing canvas
 window.addEventListener('load', () => {
     resizeCanvas();
-    drawChartPlaceholder();
+    drawDvTofChart();
 });
 
 window.addEventListener('resize', () => {
     resizeCanvas();
-    drawChartPlaceholder();
+    drawDvTofChart();
 });
 
 // Fallback if load already fired
 if (document.readyState === 'complete') {
     resizeCanvas();
-    drawChartPlaceholder();
+    drawDvTofChart();
 }
 
 // Populate Phase 2 validation panel
