@@ -955,56 +955,62 @@ function lambertSolve(r1, r2, tof, prograde = true) {
 
     const A = Math.sin(dnu) * Math.sqrt(r1mag * r2mag / (1 - Math.cos(dnu)));
 
-    // Newton-Raphson on F(z) = t*(z) - tof = 0
-    // Initial guess: z = 0 (parabolic)
-    let z    = 0;
+    // Helper: compute transfer time for a given universal variable z
+    const tofAtZ = (z) => {
+        const C = stumpffC(z);
+        const S = stumpffS(z);
+        const y = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
+        if (y < 0) return NaN;
+        const sqrtY = Math.sqrt(y);
+        const chi = sqrtY / Math.sqrt(C);
+        return (chi*chi*chi*S + A*sqrtY) / Math.sqrt(MU);
+    };
+
+    // Initial guess: z=0 (parabolic). For shorter ToF, shift to z>0 (elliptic).
+    const t0 = tofAtZ(0);
+    let z = (!isNaN(t0) && tof < t0) ? 1.5 : 0;
+
     const TOL  = 1e-8;
     const ITER = 60;
     let converged = false;
     let iters     = 0;
-    let y, C, S, sqrtY, t;
+    let t_curr    = NaN;
 
     for (let i = 0; i < ITER; i++) {
-        C    = stumpffC(z);
-        S    = stumpffS(z);
-        y    = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
-        if (y < 0) { z += 0.1; continue; } // keep y positive
+        t_curr = tofAtZ(z);
 
-        sqrtY = Math.sqrt(y);
-        const chi   = sqrtY / Math.sqrt(C);
-        t     = (chi * chi * chi * S + A * sqrtY) / Math.sqrt(MU);
+        // y < 0: back off towards z=0
+        if (isNaN(t_curr)) { z -= 0.2; continue; }
 
-        // Derivative dt/dz
-        let dtdz;
-        if (Math.abs(z) > 1e-8) {
-            const dy_dz = A / (2*Math.sqrt(C)) *
-                          (3*S*C/(2*C) - 3*S/(2*C) +
-                           A / Math.sqrt(r1mag*r2mag));   // simplified
-            // More robust version:
-            const yCz    = y / C;
-            const dydz   = A * (3*S*C - 2) / (4*C*C) + A * (A/(8*sqrtY*C));
-            dtdz = (chi*chi*chi * (S/(2*z) - (3*S*S)/(2*C)) + A/8 * (3*S*sqrtY/C + A*Math.sqrt(C/y))) / Math.sqrt(MU);
-        } else {
-            dtdz = Math.sqrt(2) / 40 * Math.pow(y, 1.5) / Math.sqrt(MU);
-        }
+        const F = t_curr - tof;
+        if (Math.abs(F) < TOL) { converged = true; iters = i + 1; break; }
 
-        const dF = t - tof;
-        if (Math.abs(dF) < TOL) { converged = true; iters = i + 1; break; }
+        // Numerical central-difference derivative dt/dz
+        const h  = 1e-5 * (1 + Math.abs(z));
+        let tp   = tofAtZ(z + h);
+        let tm   = tofAtZ(z - h);
+        if (isNaN(tp)) tp = t_curr;
+        if (isNaN(tm)) tm = t_curr;
+        const dtdz = (tp - tm) / (2 * h);
 
-        z -= dF / dtdz;
+        if (Math.abs(dtdz) < 1e-20) { iters = i + 1; break; }
+
+        let dz = -F / dtdz;
+        dz = Math.max(-2.0, Math.min(2.0, dz)); // limit step size
+        z += dz;
         iters = i + 1;
     }
-    if (!converged && Math.abs(t - tof) < 1e-4) converged = true; // near-converged
+    if (!converged && !isNaN(t_curr) && Math.abs(t_curr - tof) < 1e-3) converged = true;
 
     if (!converged) {
         return { v1: null, v2: null, converged: false, iters,
-                 debug: { z, t, tof, error: 'Did not converge' } };
+                 debug: { z, t: t_curr, tof, error: 'Did not converge' } };
     }
 
     // Lagrange coefficients
-    C = stumpffC(z); S = stumpffS(z);
-    y = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
-    sqrtY = Math.sqrt(y);
+    const C = stumpffC(z), S = stumpffS(z);
+    const y = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
+    const sqrtY = Math.sqrt(y);
 
     const f    =  1 - y / r1mag;
     const g    =  A * sqrtY / Math.sqrt(MU);
