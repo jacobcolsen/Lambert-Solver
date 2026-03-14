@@ -8,7 +8,7 @@ PHASE 1 — Canvas Foundation
 We are building an interactive Lambert solver as a single self-contained HTML file.
 Start Phase 1: Canvas Foundation.
 
-Create the HTML file `lambert_solver.html` with:
+Create the HTML file `index.html` with:
 - An HTML5 Canvas centered on Earth (blue circle, ~6371km radius scaled appropriately)
 - A coordinate system in km, with zoom (scroll wheel) and pan (click+drag)
 - A function to draw an orbit given semi-major axis (a), eccentricity (e), argument of periapsis (ω) as an ellipse
@@ -23,7 +23,7 @@ No Lambert solving yet — just the visual foundation. Make it look polished.
 PHASE 2 — Lambert Solver Core
 -------------------------------
 We are building an interactive Lambert solver as a single self-contained HTML file.
-Phase 1 (canvas, orbits, satellite placement, UI shell) is complete in `lambert_solver.html`.
+Phase 1 (canvas, orbits, satellite placement, UI shell) is complete in `index.html`.
 
 Start Phase 2: Lambert Solver Core.
 
@@ -43,7 +43,7 @@ Do not change the visual layout from Phase 1. Just wire in the math engine and s
 PHASE 3 — Transfer Visualization
 ----------------------------------
 We are building an interactive Lambert solver as a single self-contained HTML file.
-Phases 1 (canvas/UI) and 2 (Lambert solver core, validated against Hohmann) are complete in `lambert_solver.html`.
+Phases 1 (canvas/UI) and 2 (Lambert solver core, validated against Hohmann) are complete in `index.html`.
 
 Start Phase 3: Transfer Visualization.
 
@@ -61,7 +61,7 @@ Test that the transfer ellipse is geometrically correct and the ΔV arrows point
 PHASE 4 — Interactivity
 -------------------------
 We are building an interactive Lambert solver as a single self-contained HTML file.
-Phases 1-3 are complete in `lambert_solver.html`. The Lambert solver works, the transfer ellipse draws correctly, ΔV vectors and orbit parameters display correctly.
+Phases 1-3 are complete in `index.html`. The Lambert solver works, the transfer ellipse draws correctly, ΔV vectors and orbit parameters display correctly.
 
 Start Phase 4: Interactivity.
 
@@ -77,7 +77,7 @@ Test: drag satellite to opposite side of orbit, adjust ToF slider across full ra
 PHASE 5 — Math & Education Panels
 -----------------------------------
 We are building an interactive Lambert solver as a single self-contained HTML file.
-Phases 1-4 are complete in `lambert_solver.html`. The solver is interactive, draggable, and updates live.
+Phases 1-4 are complete in `index.html`. The solver is interactive, draggable, and updates live.
 
 Start Phase 5: Math & Education Panels.
 
@@ -99,7 +99,7 @@ Test: verify all math panel values match the actual computed outputs. Verify the
 PHASE 6 — Animation & Polish
 ------------------------------
 We are building an interactive Lambert solver as a single self-contained HTML file.
-Phases 1-5 are complete in `lambert_solver.html`. All math, interactivity, and education panels are working.
+Phases 1-5 are complete in `index.html`. All math, interactivity, and education panels are working.
 
 Start Phase 6: Animation & Polish.
 

@@ -617,6 +617,10 @@ const earthImg = new Image();
 earthImg.src = 'earth top view.jpg';
 earthImg.onload = () => { if (state.initialized) render(); };
 
+const moonImg = new Image();
+moonImg.src = 'moon no background.001.png';
+moonImg.onload = () => { if (state.initialized) render(); };
+
 // ================================================================
 // APPLICATION STATE
 //   All mutable data lives here so later phases can extend cleanly.
@@ -639,6 +643,14 @@ const state = {
         color:  '#ff8c42',
         name:   'SAT B',
         r:      6,
+    },
+
+    // ── Moon ──
+    moon: {
+        orbit:  { a: 384400, e: 0.0549, omega: Math.PI * 0.3 },  // real semi-major axis & eccentricity
+        nu:     Math.PI * 0.7,   // starting true anomaly
+        radius: 1737,            // km (real lunar radius)
+        imgScale: 1.0,           // no background — fills circle exactly
     },
 
     // ── Transfer orbit (populated by Lambert solver in Phase 2) ──
@@ -773,13 +785,14 @@ function drawEarth() {
     const [cx, cy] = worldToCanvas(0, 0);
     const r        = km2px(EARTH_RADIUS);
 
-    // Outer atmosphere glow (drawn behind Earth)
-    const atmo = ctx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.45);
-    atmo.addColorStop(0,   'rgba(60,140,255,0.22)');
-    atmo.addColorStop(0.4, 'rgba(30,100,220,0.10)');
-    atmo.addColorStop(1,   'rgba(10, 50,200,0)');
+    // Outer atmosphere glow — Kármán line is ~100km = ~1.6% of Earth radius.
+    // Glow extends a bit beyond that for visibility, but kept physically plausible.
+    const atmo = ctx.createRadialGradient(cx, cy, r * 0.97, cx, cy, r * 1.06);
+    atmo.addColorStop(0,   'rgba(80,160,255,0.30)');
+    atmo.addColorStop(0.5, 'rgba(50,120,240,0.12)');
+    atmo.addColorStop(1,   'rgba(20, 80,200,0)');
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 1.45, 0, TWO_PI);
+    ctx.arc(cx, cy, r * 1.06, 0, TWO_PI);
     ctx.fillStyle = atmo;
     ctx.fill();
 
@@ -790,8 +803,15 @@ function drawEarth() {
     ctx.clip();
 
     if (earthImg.complete && earthImg.naturalWidth > 0) {
-        // Draw texture
-        ctx.drawImage(earthImg, cx - r, cy - r, r * 2, r * 2);
+        // Scale up so the globe fills the clip circle,
+        // compensating for the black border in the source image.
+        const imgScale = 1.32;
+        ctx.drawImage(earthImg,
+            cx - r * imgScale,
+            cy - r * imgScale,
+            r * 2 * imgScale,
+            r * 2 * imgScale
+        );
     } else {
         // Fallback gradient while image loads
         const body = ctx.createRadialGradient(cx - r * 0.28, cy - r * 0.28, r * 0.08, cx, cy, r);
@@ -816,12 +836,72 @@ function drawEarth() {
 
     ctx.restore();
 
-    // Atmosphere rim (drawn on top of Earth edge)
+    // Atmosphere rim — thin blue ring, ~100km thick at scale
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.008, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(120,200,255,0.55)';
+    ctx.lineWidth   = Math.max(1.5, r * 0.016);
+    ctx.stroke();
+}
+
+function drawMoon() {
+    const moon     = state.moon;
+    const pos      = orbitPos(moon.orbit, moon.nu);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+
+    // Physical radius in pixels, but enforce a minimum so it's always visible
+    const rPhysical = km2px(moon.radius);
+    const MIN_R     = 5;
+    const r         = Math.max(rPhysical, MIN_R);
+
+    // Skip only if genuinely way off-canvas
+    if (cx < -r * 6 || cx > canvas.width  + r * 6 ||
+        cy < -r * 6 || cy > canvas.height + r * 6) return;
+
+    // Clip and draw texture
+    ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, TWO_PI);
-    ctx.strokeStyle = 'rgba(100,190,255,0.45)';
-    ctx.lineWidth   = Math.max(1.5, r * 0.03);
+    ctx.clip();
+
+    if (moonImg.complete && moonImg.naturalWidth > 0) {
+        // Crop the center square from the source to avoid aspect-ratio distortion
+        const iw   = moonImg.naturalWidth;
+        const ih   = moonImg.naturalHeight;
+        const size = Math.min(iw, ih);
+        const sx   = (iw - size) / 2;
+        const sy   = (ih - size) / 2;
+        ctx.drawImage(moonImg, sx, sy, size, size, cx - r, cy - r, r * 2, r * 2);
+    } else {
+        ctx.fillStyle = '#7a7a72';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, TWO_PI);
+        ctx.fill();
+    }
+
+    // Vignette for spherical depth (no atmosphere on Moon)
+    const vig = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 0.1, cx, cy, r);
+    vig.addColorStop(0,   'rgba(0,0,0,0)');
+    vig.addColorStop(0.6, 'rgba(0,0,0,0.12)');
+    vig.addColorStop(1,   'rgba(0,0,0,0.72)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.fillStyle = vig;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Edge stroke
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(180,180,160,0.35)';
+    ctx.lineWidth   = 1;
     ctx.stroke();
+
+    // Label — always visible regardless of size
+    ctx.font      = '10px Courier New';
+    ctx.fillStyle = 'rgba(200,200,180,0.75)';
+    ctx.fillText('MOON', cx + r + 5, cy + 4);
 }
 
 function drawOrbit(orbit, color, lineWidth, dash = []) {
@@ -934,9 +1014,15 @@ function render() {
     drawStars();
     drawCrosshair();
 
-    // Orbits (draw before Earth so Earth sits on top)
+    // Moon orbit (dashed — drawn first so everything sits on top)
+    drawOrbit(state.moon.orbit, 'rgba(180,180,160,0.30)', 1, [5, 8]);
+
+    // Satellite orbits
     drawOrbit(state.satA.orbit, state.satA.color + '50', 1.5);
     drawOrbit(state.satB.orbit, state.satB.color + '50', 1.5);
+
+    // Moon (behind Earth)
+    drawMoon();
 
     // Earth
     drawEarth();
