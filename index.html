@@ -713,6 +713,7 @@ const state = {
     panStart:     { cx: 0, cy: 0, camX: 0, camY: 0 },
     mouseWorld:   { x: 0, y: 0 },
     dragSat:      null,   // 'satA' | 'satB' | null
+    dragOrbit:    null,   // 'satA' | 'satB' | null — dragging orbit circle to resize
 
     // ── Star field (generated once) ──
     stars: [],
@@ -1818,6 +1819,21 @@ function hitTestSatellite(cxPx, cyPx) {
     return null;
 }
 
+// ── Orbit ring hit test — returns 'satA' | 'satB' | null ──
+function hitTestOrbit(cxPx, cyPx) {
+    const TOL = 8; // px from the ring
+    const [wx, wy] = canvasToWorld(cxPx, cyPx);
+    const distWorld = Math.hypot(wx, wy);
+    for (const key of ['satA', 'satB']) {
+        const a = state[key].orbit.a;
+        // Convert orbit radius to screen pixels for tolerance comparison
+        const ringPx = a * state.camera.scale;
+        const mousePx = distWorld * state.camera.scale;
+        if (Math.abs(mousePx - ringPx) < TOL) return key;
+    }
+    return null;
+}
+
 // ── Snap satellite nu to the angle from Earth center toward (wx,wy) ──
 function snapNuToMouse(sat, wx, wy) {
     let nu = Math.atan2(wy, wx) - sat.orbit.omega;
@@ -1875,12 +1891,16 @@ canvas.addEventListener('wheel', (e) => {
     render();
 }, { passive: false });
 
-// Mousedown — satellite drag takes priority over pan
+// Mousedown — satellite drag > orbit resize > pan
 canvas.addEventListener('mousedown', (e) => {
-    const hit = hitTestSatellite(e.offsetX, e.offsetY);
-    if (hit) {
-        state.dragSat = hit;
+    const hitSat   = hitTestSatellite(e.offsetX, e.offsetY);
+    const hitOrbit = hitTestOrbit(e.offsetX, e.offsetY);
+    if (hitSat) {
+        state.dragSat = hitSat;
         canvas.style.cursor = 'crosshair';
+    } else if (hitOrbit) {
+        state.dragOrbit = hitOrbit;
+        canvas.style.cursor = 'ns-resize';
     } else {
         state.isPanning = true;
         state.panStart  = {
@@ -1899,8 +1919,17 @@ canvas.addEventListener('mousemove', (e) => {
     if (state.dragSat) {
         // Snap satellite to the angle from Earth toward mouse
         state[state.dragSat].nu = snapNuToMouse(state[state.dragSat], wx, wy);
-        // render() is already called by animLoop; no extra call needed
-        // but call explicitly so it feels instant even at low warp
+        render();
+
+    } else if (state.dragOrbit) {
+        // Set orbit radius to mouse's distance from Earth center
+        const MIN_R = EARTH_RADIUS + 100;    // just above surface
+        const MAX_R = EARTH_RADIUS + 500000; // generous upper bound
+        const newR  = Math.max(MIN_R, Math.min(MAX_R, Math.hypot(wx, wy)));
+        state[state.dragOrbit].orbit.a = newR;
+        // Rescale ToF to preserve the same fraction of Hohmann time
+        state.transfer.tof = sliderToToF(tofSlider.value);
+        updateToFDisplay(state.transfer.tof);
         render();
 
     } else if (state.isPanning) {
@@ -1911,15 +1940,17 @@ canvas.addEventListener('mousemove', (e) => {
         render();
 
     } else {
-        // Hover cursor: pointer over satellites, grab over canvas
-        const hit = hitTestSatellite(e.offsetX, e.offsetY);
-        canvas.style.cursor = hit ? 'pointer' : 'grab';
+        // Hover cursor: pointer over satellites, resize over orbit rings, grab elsewhere
+        const hitSat   = hitTestSatellite(e.offsetX, e.offsetY);
+        const hitOrbit = !hitSat && hitTestOrbit(e.offsetX, e.offsetY);
+        canvas.style.cursor = hitSat ? 'pointer' : hitOrbit ? 'ns-resize' : 'grab';
         updateOverlay();
     }
 });
 
 function endInteraction() {
     state.dragSat     = null;
+    state.dragOrbit   = null;
     state.isPanning   = false;
     canvas.style.cursor = 'grab';
     canvas.classList.remove('panning');
