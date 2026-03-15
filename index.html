@@ -790,6 +790,7 @@ const state = {
     mouseWorld:   { x: 0, y: 0 },
     dragSat:      null,   // 'satA' | 'satB' | null
     dragOrbit:    null,   // 'satA' | 'satB' | null — dragging orbit circle to resize
+    tweenStart:   0,      // performance.now() of last interaction — drives fade-in
 
     // ── Star field (generated once) ──
     stars: [],
@@ -972,7 +973,6 @@ function computeTransfer() {
         solverDebug: sol.debug,
         impactsEarth,
         periapsis,
-        tweenStart:  performance.now(),   // for fade-in tween
     });
 }
 
@@ -1513,9 +1513,9 @@ function drawTransfer() {
     const orb = t.orbit;
     const sc  = state.camera.scale;
 
-    // Smooth tween: fade in over 150ms when a new solution arrives
-    const tweenAlpha = t.tweenStart
-        ? Math.min(1, (performance.now() - t.tweenStart) / 150)
+    // Smooth tween: fade in over 150ms after each interaction event
+    const tweenAlpha = state.tweenStart
+        ? Math.min(1, (performance.now() - state.tweenStart) / 150)
         : 1;
 
     // World-units per km/s for each arrow class (zoom-invariant screen size)
@@ -2531,6 +2531,7 @@ canvas.addEventListener('mousemove', (e) => {
     if (state.dragSat) {
         // Snap satellite to the angle from Earth toward mouse
         state[state.dragSat].nu = snapNuToMouse(state[state.dragSat], wx, wy);
+        state.tweenStart = performance.now();
         markDvCurveDirty();
         render();
 
@@ -2543,6 +2544,7 @@ canvas.addEventListener('mousemove', (e) => {
         // Rescale ToF to preserve the same fraction of Hohmann time
         state.transfer.tof = sliderToToF(tofSlider.value);
         updateToFDisplay(state.transfer.tof);
+        state.tweenStart = performance.now();
         markDvCurveDirty();
         render();
 
@@ -2628,6 +2630,7 @@ tofSlider.disabled = false;
 tofSlider.addEventListener('input', () => {
     state.transfer.tof = sliderToToF(tofSlider.value);
     updateToFDisplay(state.transfer.tof);
+    state.tweenStart = performance.now();
     render();
 });
 
