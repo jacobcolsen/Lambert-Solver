@@ -422,6 +422,11 @@
             color: var(--sat-a);
         }
 
+        .bar-btn.btn-active {
+            border-color: var(--transfer);
+            color: var(--transfer);
+        }
+
         /* ── Scrollbar ── */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: var(--bg); }
@@ -540,7 +545,7 @@
 <!-- ════════════════ HEADER ════════════════ -->
 <div id="header">
     <h1>LAMBERT SOLVER</h1>
-    <div class="badge">PHASE 5</div>
+    <div class="badge">PHASE 6</div>
     <div class="subtitle">EARTH-CENTERED · 2D ORBITAL TRANSFER · PROGRADE</div>
 </div>
 
@@ -661,50 +666,6 @@
             <div class="chart-note">AVAILABLE AFTER PHASE 2</div>
         </div>
 
-        <!-- DEBUG: Phase 2 Validation -->
-        <div class="panel" id="panel-validation">
-            <div class="panel-header">
-                <span class="panel-title">Phase 2 — Hohmann Validation</span>
-                <span class="panel-tag" id="val-badge">—</span>
-            </div>
-            <table class="orbit-table" style="font-size:11px;">
-                <thead>
-                    <tr>
-                        <th style="text-align:left;">Quantity</th>
-                        <th>Analytical</th>
-                        <th>Lambert</th>
-                        <th>Error</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="color:var(--text-dim);">Δv₁ (m/s)</td>
-                        <td id="val-dv1-a">—</td>
-                        <td id="val-dv1-l">—</td>
-                        <td id="val-dv1-e">—</td>
-                    </tr>
-                    <tr>
-                        <td style="color:var(--text-dim);">Δv₂ (m/s)</td>
-                        <td id="val-dv2-a">—</td>
-                        <td id="val-dv2-l">—</td>
-                        <td id="val-dv2-e">—</td>
-                    </tr>
-                    <tr>
-                        <td style="color:var(--text-dim);">Total (m/s)</td>
-                        <td id="val-tot-a">—</td>
-                        <td id="val-tot-l">—</td>
-                        <td id="val-tot-e">—</td>
-                    </tr>
-                    <tr>
-                        <td style="color:var(--text-dim);">Iterations</td>
-                        <td id="val-iters-a">—</td>
-                        <td id="val-iters-l">—</td>
-                        <td>—</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
         <!-- 5. Legend -->
         <div class="panel">
             <div class="panel-header">
@@ -721,15 +682,19 @@
                 </div>
                 <div class="legend-item">
                     <div class="legend-line" style="background:#ffd700;"></div>
-                    <span>Transfer orbit (phase 3)</span>
+                    <span>Transfer orbit</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-line" style="background:#4aed88; height:1px;"></div>
-                    <span>Δv₁ departure burn vector</span>
+                    <span>Δv₁ — departure burn</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-line" style="background:#ff4a6a; height:1px;"></div>
-                    <span>Δv₂ arrival burn vector</span>
+                    <span>Δv₂ — arrival burn</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ffffff; width:8px; height:8px;"></div>
+                    <span>Spacecraft (animation)</span>
                 </div>
             </div>
         </div>
@@ -745,6 +710,7 @@
     </div>
     <input type="range" id="tof-slider" min="0" max="100" value="50" disabled>
     <div class="bar-buttons">
+        <button class="bar-btn" id="btn-animate">▶ ANIMATE</button>
         <button class="bar-btn" id="btn-hohmann">HOHMANN</button>
         <button class="bar-btn" id="btn-reset-view">RESET VIEW</button>
     </div>
@@ -835,6 +801,14 @@ const state = {
         warpIndex:  0,       // index into warpLevels
         warpLevels: [1, 100, 500, 1000, 5000, 10000, 50000, 100000, 150000],
         warpLabels: ['1×', '100×', '500×', '1k×', '5k×', '10k×', '50k×', '100k×', '150k×'],
+    },
+
+    // ── Transfer animation (Phase 6) ──
+    txAnim: {
+        active:    false,
+        progress:  0,       // 0 → 1 along the transfer arc
+        wallStart: null,    // performance.now() when animation started
+        duration:  4000,    // ms real-time for full transfer
     },
 
     // ── Misc ──
@@ -998,6 +972,7 @@ function computeTransfer() {
         solverDebug: sol.debug,
         impactsEarth,
         periapsis,
+        tweenStart:  performance.now(),   // for fade-in tween
     });
 }
 
@@ -1538,9 +1513,17 @@ function drawTransfer() {
     const orb = t.orbit;
     const sc  = state.camera.scale;
 
+    // Smooth tween: fade in over 150ms when a new solution arrives
+    const tweenAlpha = t.tweenStart
+        ? Math.min(1, (performance.now() - t.tweenStart) / 150)
+        : 1;
+
     // World-units per km/s for each arrow class (zoom-invariant screen size)
     const DV_WORLD  = 80  / sc;   // ΔV arrows:  80 px / (km/s)
     const VEL_WORLD = 11  / sc;   // full-v arrows: 11 px / (km/s)
+
+    ctx.save();
+    ctx.globalAlpha = tweenAlpha;
 
     // ── Full transfer ellipse (faint dashed) ──
     drawOrbit(orb, 'rgba(255,215,0,0.20)', 1, [5, 7]);
@@ -1607,6 +1590,172 @@ function drawTransfer() {
     drawArrow(t.r1[0], t.r1[1], dv1e[0], dv1e[1], '#4aed88', 2.5, 11);  // Δv1 green
     drawArrow(t.r2[0], t.r2[1], dv2e[0], dv2e[1], '#ff4a6a', 2.5, 11);  // Δv2 red
 
+    ctx.restore(); // end tween alpha
+
+}
+
+// ================================================================
+// PHASE 6 — SPACECRAFT, BURN FLASHES, ORBIT LABELS, MISSION CLOCK
+// ================================================================
+
+/** Draw spacecraft triangle at canvas (cx,cy) facing velAngle (radians, canvas coords) */
+function drawSpacecraft(cx, cy, velAngle) {
+    const S = 9; // half-size px
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(velAngle + Math.PI / 2);
+
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(0,       -S * 1.6);  // nose
+    ctx.lineTo(-S * 0.7, S * 0.8);  // left wing tip
+    ctx.lineTo(0,        S * 0.2);  // tail notch
+    ctx.lineTo( S * 0.7, S * 0.8);  // right wing tip
+    ctx.closePath();
+
+    ctx.fillStyle   = '#ffffff';
+    ctx.shadowColor = 'rgba(255,255,255,0.9)';
+    ctx.shadowBlur  = 14;
+    ctx.fill();
+
+    // Engine glow trail
+    ctx.beginPath();
+    ctx.moveTo(-S * 0.25, S * 0.5);
+    ctx.lineTo(0,         S * 2.2);
+    ctx.lineTo( S * 0.25, S * 0.5);
+    ctx.fillStyle   = 'rgba(255,180,60,0.55)';
+    ctx.shadowColor = 'rgba(255,160,40,0.8)';
+    ctx.shadowBlur  = 10;
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/** Flash ring at a world position — intensity 0–1 */
+function drawBurnFlash(worldX, worldY, color, intensity) {
+    if (intensity <= 0) return;
+    const [cx, cy] = worldToCanvas(worldX, worldY);
+    ctx.save();
+    ctx.globalAlpha = intensity;
+
+    // Expanding ring
+    const R = 18 + (1 - intensity) * 22;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, TWO_PI);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 20;
+    ctx.stroke();
+
+    // Inner bright circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, TWO_PI);
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/** Mission elapsed time HUD during transfer animation */
+function drawMissionClock(elapsedSec) {
+    const days = Math.floor(elapsedSec / 86400);
+    const hrs  = Math.floor((elapsedSec % 86400) / 3600);
+    const mins = Math.floor((elapsedSec % 3600) / 60);
+    const secs = Math.floor(elapsedSec % 60);
+    const label = `MET  ${String(days).padStart(2,'0')}d ${String(hrs).padStart(2,'0')}h ${String(mins).padStart(2,'0')}m ${String(secs).padStart(2,'0')}s`;
+
+    ctx.save();
+    ctx.font = 'bold 12px Courier New';
+    const w = ctx.measureText(label).width + 24;
+    const h = 32;
+    const x = (canvas.width - w) / 2;
+    const y = 16;
+
+    ctx.fillStyle   = 'rgba(8,8,24,0.82)';
+    ctx.strokeStyle = 'rgba(255,215,0,0.6)';
+    ctx.lineWidth   = 1;
+    roundRect(ctx, x, y, w, h, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle    = '#ffd700';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, canvas.width / 2, y + h / 2);
+    ctx.restore();
+}
+
+/** Draw named orbit labels on the canvas */
+function drawOrbitNames() {
+    const sc = state.camera.scale;
+
+    // Helper: place text at angle nu on a given orbit, offset outward
+    function orbitNameLabel(orbit, nu, text, color) {
+        const pos   = orbitPos(orbit, nu);
+        const dist  = Math.hypot(pos.x, pos.y);
+        const outset = 14 / sc;                     // offset outward in world units
+        const wx    = pos.x * (1 + outset / dist);
+        const wy    = pos.y * (1 + outset / dist);
+        const [cx, cy] = worldToCanvas(wx, wy);
+        ctx.save();
+        ctx.font         = '10px Courier New';
+        ctx.fillStyle    = color;
+        ctx.globalAlpha  = 0.75;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, cx, cy);
+        ctx.restore();
+    }
+
+    orbitNameLabel(state.satA.orbit, Math.PI * 1.25, 'DEPARTURE ORBIT', state.satA.color);
+    orbitNameLabel(state.satB.orbit, Math.PI * 1.25, 'ARRIVAL ORBIT',   state.satB.color);
+
+    // Transfer orbit label — midpoint of the arc
+    const t = state.transfer;
+    if (t.valid) {
+        const nu1  = posToNU(t.orbit, t.r1);
+        const nu2  = posToNU(t.orbit, t.r2);
+        let   arc  = nu2 - nu1;
+        if (arc <= 0) arc += TWO_PI;
+        const nuMid = nu1 + arc * 0.5;
+        orbitNameLabel(t.orbit, nuMid, 'TRANSFER ORBIT', '#ffd700');
+    }
+}
+
+/** Draw spacecraft along transfer arc during animation */
+function drawTransferAnimation() {
+    const a   = state.txAnim;
+    const t   = state.transfer;
+    if (!t.valid) return;
+
+    const orb = t.orbit;
+    const nu1 = posToNU(orb, t.r1);
+    const nu2 = posToNU(orb, t.r2);
+    let   arc = nu2 - nu1;
+    if (arc <= 0) arc += TWO_PI;
+
+    const nuNow  = nu1 + a.progress * arc;
+    const pos    = orbitPos(orb, nuNow);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+
+    // Velocity direction for heading
+    const vel      = orbitVelocity(orb, nuNow);
+    const velAngle = Math.atan2(-vel[1], vel[0]); // canvas y is flipped
+    drawSpacecraft(cx, cy, velAngle);
+
+    // Departure burn flash (first 8% of animation)
+    if (a.progress < 0.08) {
+        drawBurnFlash(t.r1[0], t.r1[1], '#4aed88', 1 - a.progress / 0.08);
+    }
+    // Arrival burn flash (last 8% of animation)
+    if (a.progress > 0.92) {
+        drawBurnFlash(t.r2[0], t.r2[1], '#ff4a6a', (a.progress - 0.92) / 0.08);
+    }
+
+    // Mission elapsed time
+    drawMissionClock(a.progress * t.tof);
 }
 
 // ================================================================
@@ -1718,11 +1867,23 @@ function animLoop(timestamp) {
         state.anim.simTime += dt;
 
         // Advance true anomalies — skip whichever satellite is being dragged
-        if (state.dragSat !== 'satA')
+        // Also freeze satellites while transfer animation is running
+        if (state.dragSat !== 'satA' && !state.txAnim.active)
             state.satA.nu = (state.satA.nu + meanMotion(state.satA.orbit.a) * dt) % TWO_PI;
-        if (state.dragSat !== 'satB')
+        if (state.dragSat !== 'satB' && !state.txAnim.active)
             state.satB.nu = (state.satB.nu + meanMotion(state.satB.orbit.a) * dt) % TWO_PI;
         state.moon.nu = (state.moon.nu + meanMotion(state.moon.orbit.a) * dt) % TWO_PI;
+
+        // Transfer animation progress
+        if (state.txAnim.active) {
+            state.txAnim.progress = Math.min(1,
+                (timestamp - state.txAnim.wallStart) / state.txAnim.duration);
+            if (state.txAnim.progress >= 1) {
+                state.txAnim.active = false;
+                document.getElementById('btn-animate').classList.remove('btn-active');
+                document.getElementById('btn-animate').textContent = '▶ ANIMATE';
+            }
+        }
 
         render();
     }
@@ -1763,9 +1924,17 @@ function render() {
     drawOrbitLabel(state.satB.orbit, Math.PI * 1.75,
         `${(state.satB.orbit.a - EARTH_RADIUS).toFixed(0)} km`, state.satB.color);
 
+    // Orbit names (drawn before satellites so they don't cover dots)
+    drawOrbitNames();
+
     // Satellites (on top of everything)
     drawSatellite(state.satA);
     drawSatellite(state.satB);
+
+    // Transfer animation — spacecraft, burn flashes, mission clock
+    if (state.txAnim.active || state.txAnim.progress > 0) {
+        drawTransferAnimation();
+    }
 
     // Scale bar
     drawScaleBar();
@@ -2462,6 +2631,26 @@ tofSlider.addEventListener('input', () => {
     render();
 });
 
+// ── Animate Transfer button ──
+document.getElementById('btn-animate').addEventListener('click', () => {
+    if (!state.transfer.valid) return;
+    const btn = document.getElementById('btn-animate');
+    if (state.txAnim.active) {
+        // Stop animation
+        state.txAnim.active   = false;
+        state.txAnim.progress = 0;
+        btn.classList.remove('btn-active');
+        btn.textContent = '▶ ANIMATE';
+    } else {
+        // Start animation — freeze orbital motion, begin from r1
+        state.txAnim.active   = true;
+        state.txAnim.progress = 0;
+        state.txAnim.wallStart = performance.now();
+        btn.classList.add('btn-active');
+        btn.textContent = '■ STOP';
+    }
+});
+
 // ── Hohmann button — snap both satellites to canonical Hohmann positions ──
 document.getElementById('btn-hohmann').addEventListener('click', () => {
     // SAT A at nu=0 (right side), SAT B at nu=π (opposite, on its orbit)
@@ -2509,7 +2698,7 @@ if (document.readyState === 'complete') {
     drawDvTofChart();
 }
 
-// Populate Phase 2 validation panel
+/* Phase 2 validation panel removed in Phase 6. Logic preserved below for reference.
 (function populateValidation() {
     const v  = validation;
     const h  = v.hohmann;
@@ -2545,6 +2734,7 @@ if (document.readyState === 'complete') {
         });
     }
 })();
+*/
 
 // Seed transfer ToF with Hohmann default and sync slider
 state.transfer.tof  = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
