@@ -1,0 +1,2751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lambert Solver — Interactive Orbital Mechanics</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:           #080818;
+            --panel-bg:     #0c0c22;
+            --panel-bg2:    #0f0f28;
+            --border:       #1a2540;
+            --border-bright:#2a3a60;
+            --sat-a:        #00d4ff;
+            --sat-b:        #ff8c42;
+            --transfer:     #ffd700;
+            --text:         #b8c8e0;
+            --text-dim:     #4a6080;
+            --text-bright:  #e0ecff;
+            --green:        #4aed88;
+            --red:          #ff4a6a;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Courier New', 'Courier', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* ── Header ── */
+        #header {
+            height: 48px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 24px;
+            flex-shrink: 0;
+        }
+
+        #header h1 {
+            font-size: 15px;
+            color: var(--text-bright);
+            letter-spacing: 3px;
+            font-weight: normal;
+        }
+
+        #header .badge {
+            font-size: 10px;
+            color: var(--sat-a);
+            border: 1px solid var(--sat-a);
+            padding: 2px 8px;
+            border-radius: 2px;
+            letter-spacing: 1px;
+            opacity: 0.7;
+        }
+
+        #header .subtitle {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: auto;
+            letter-spacing: 1px;
+        }
+
+        /* ── Main layout ── */
+        #main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Canvas area ── */
+        #canvas-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        #mainCanvas {
+            display: block;
+            cursor: grab;
+        }
+
+        #mainCanvas.panning { cursor: grabbing; }
+
+        /* Canvas overlays */
+        #canvas-overlay {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            pointer-events: none;
+        }
+
+        #canvas-overlay .ov-row {
+            font-size: 10px;
+            color: var(--text-dim);
+            line-height: 1.8;
+            letter-spacing: 1px;
+        }
+
+        #canvas-overlay .ov-val {
+            color: var(--text);
+        }
+
+        #hint-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            font-size: 10px;
+            color: var(--text-dim);
+            pointer-events: none;
+            letter-spacing: 1px;
+        }
+
+        #hint-overlay div { line-height: 1.9; }
+
+        /* ── Side panel ── */
+        #side-panel {
+            width: 340px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel {
+            border-bottom: 1px solid var(--border);
+            padding: 14px 16px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .panel-title {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+        }
+
+        .panel-tag {
+            font-size: 9px;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            padding: 1px 6px;
+            border-radius: 2px;
+            letter-spacing: 1px;
+        }
+
+        /* ── Orbit Parameters table ── */
+        .orbit-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .orbit-table th {
+            font-size: 9px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            padding: 3px 6px;
+            text-align: right;
+            border-bottom: 1px solid var(--border);
+            font-weight: normal;
+        }
+
+        .orbit-table th:first-child { text-align: left; }
+
+        .orbit-table td {
+            padding: 7px 6px;
+            text-align: right;
+            color: var(--text);
+            border-bottom: 1px solid rgba(26,37,64,0.6);
+            font-size: 12px;
+        }
+
+        .orbit-table td:first-child { text-align: left; font-size: 11px; letter-spacing: 1px; }
+        .orbit-table tr.row-dep  td:first-child { color: var(--sat-a); }
+        .orbit-table tr.row-xfer td:first-child { color: var(--transfer); opacity: 0.6; }
+        .orbit-table tr.row-arr  td:first-child { color: var(--sat-b); }
+        .orbit-table .pending { color: var(--text-dim); font-style: italic; font-size: 11px; }
+
+        /* ── ΔV Budget ── */
+        .dv-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(26,37,64,0.6);
+        }
+
+        .dv-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .dv-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+
+        .dv-val {
+            font-size: 13px;
+            color: var(--text-bright);
+        }
+
+        .dv-val.total-val {
+            color: var(--green);
+            font-size: 15px;
+        }
+
+        .pending-val {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* ── Math Walkthrough ── */
+        .expand-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 2px 10px;
+            font-size: 9px;
+            border-radius: 2px;
+            letter-spacing: 1.5px;
+            font-family: inherit;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .expand-btn:hover {
+            border-color: var(--sat-a);
+            color: var(--sat-a);
+        }
+
+        .math-body {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.75;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 10px;
+        }
+
+        .math-step {
+            margin-bottom: 6px;
+            padding-left: 10px;
+            border-left: 2px solid var(--border);
+        }
+
+        .math-step .step-label {
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+
+        .math-step .step-content {
+            color: var(--text);
+            font-size: 11px;
+        }
+
+        .math-pending {
+            font-style: italic;
+            color: var(--text-dim);
+            font-size: 11px;
+        }
+
+        /* ── ΔV vs ToF Chart ── */
+        #dv-tof-canvas {
+            width: 100%;
+            height: 130px;
+            display: block;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+        }
+
+        .chart-note {
+            font-size: 9px;
+            color: var(--text-dim);
+            text-align: center;
+            margin-top: 5px;
+            letter-spacing: 1px;
+        }
+
+        /* ── Legend ── */
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .legend-line {
+            width: 24px;
+            height: 2px;
+            flex-shrink: 0;
+        }
+
+        /* ── Bottom bar (ToF slider) ── */
+        #bottom-bar {
+            height: 68px;
+            background: var(--panel-bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 18px;
+            flex-shrink: 0;
+        }
+
+        .tof-info {
+            flex-shrink: 0;
+            min-width: 170px;
+        }
+
+        .tof-title {
+            font-size: 9px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            margin-bottom: 3px;
+        }
+
+        .tof-value {
+            font-size: 18px;
+            color: var(--text-bright);
+            letter-spacing: 1px;
+        }
+
+        .tof-value .tof-unit {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: 4px;
+        }
+
+        #tof-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #tof-slider:not([disabled]) {
+            opacity: 1;
+            cursor: pointer;
+        }
+
+        #tof-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--sat-a);
+            cursor: pointer;
+        }
+
+        #tof-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--sat-a);
+            border: none;
+            cursor: pointer;
+        }
+
+        .bar-buttons {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .bar-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 5px 12px;
+            font-size: 9px;
+            cursor: pointer;
+            border-radius: 2px;
+            letter-spacing: 1.5px;
+            font-family: inherit;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .bar-btn:hover {
+            border-color: var(--sat-a);
+            color: var(--sat-a);
+        }
+
+        .bar-btn.btn-active {
+            border-color: var(--transfer);
+            color: var(--transfer);
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* ── Math Walkthrough expand button ── */
+        .expand-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-family: inherit;
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            padding: 2px 8px;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: border-color 0.2s, color 0.2s;
+        }
+        .expand-btn:hover { border-color: var(--sat-a); color: var(--sat-a); }
+
+        /* ── Math panel body ── */
+        .math-body  { padding-top: 2px; }
+        .math-step  { margin-bottom: 10px; }
+        .step-label {
+            font-size: 9px;
+            color: var(--text-dim);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .math-pending { font-size: 11px; color: var(--text-dim); font-style: italic; }
+        .step-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 1px 0;
+            font-size: 11px;
+        }
+        .step-var { color: var(--text-dim); }
+        .step-num { color: var(--text-bright); font-variant-numeric: tabular-nums; }
+
+        /* ── Newton-Raphson iteration table ── */
+        .iter-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            margin-top: 4px;
+        }
+        .iter-table th {
+            color: var(--text-dim);
+            text-align: right;
+            padding: 2px 3px;
+            font-weight: normal;
+            border-bottom: 1px solid var(--border);
+        }
+        .iter-table th:first-child { text-align: center; }
+        .iter-table td {
+            color: var(--text);
+            text-align: right;
+            padding: 2px 3px;
+            font-variant-numeric: tabular-nums;
+        }
+        .iter-table td:first-child { text-align: center; color: var(--text-dim); }
+        .iter-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+        .iter-converged { font-size: 10px; color: var(--green); margin-top: 4px; }
+
+        /* ── Hohmann callout ── */
+        .hohmann-callout {
+            background: rgba(255,215,0,0.07);
+            border: 1px solid rgba(255,215,0,0.4);
+            border-radius: 3px;
+            padding: 8px 10px;
+            font-size: 10px;
+            color: #ffd700;
+            letter-spacing: 0.3px;
+            line-height: 1.5;
+            margin-top: 10px;
+            display: none;
+        }
+        .hohmann-callout .hoh-star { font-size: 13px; margin-right: 4px; }
+
+        /* ── Tooltips ── */
+        .has-tip {
+            border-bottom: 1px dashed rgba(160,180,210,0.35);
+            cursor: help;
+        }
+        #tooltip-popup {
+            position: fixed;
+            background: #10102a;
+            border: 1px solid var(--border-bright);
+            border-radius: 4px;
+            padding: 7px 11px;
+            font-size: 11px;
+            color: var(--text);
+            max-width: 210px;
+            line-height: 1.5;
+            pointer-events: none;
+            z-index: 9999;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+
+        /* ── ΔV vs ToF chart ── */
+        #dv-tof-canvas {
+            display: block;
+            width: 100%;
+            height: 130px;
+        }
+        .chart-note { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="tooltip-popup"></div>
+
+<!-- ════════════════ HEADER ════════════════ -->
+<div id="header">
+    <h1>LAMBERT SOLVER</h1>
+    <div class="badge">PHASE 6</div>
+    <div class="subtitle">EARTH-CENTERED · 2D ORBITAL TRANSFER · PROGRADE</div>
+</div>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<div id="main">
+
+    <!-- Canvas -->
+    <div id="canvas-wrapper">
+        <canvas id="mainCanvas"></canvas>
+
+        <div id="hint-overlay" style="display:none;"></div>
+
+        <div id="canvas-overlay">
+            <div class="ov-row">ZOOM &nbsp;<span class="ov-val" id="ov-zoom">—</span></div>
+            <div class="ov-row">POS &nbsp;&nbsp;<span class="ov-val" id="ov-coords">—</span></div>
+        </div>
+    </div>
+
+    <!-- Side panel -->
+    <div id="side-panel">
+
+        <!-- 1. Orbital Parameters -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Orbital Parameters</span>
+            </div>
+            <table class="orbit-table">
+                <thead>
+                    <tr>
+                        <th>Orbit</th>
+                        <th>a (km)</th>
+                        <th>e</th>
+                        <th>T (min)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="row-dep">
+                        <td>DEPARTURE</td>
+                        <td id="op-a1">—</td>
+                        <td id="op-e1">—</td>
+                        <td id="op-T1">—</td>
+                    </tr>
+                    <tr class="row-xfer">
+                        <td>TRANSFER</td>
+                        <td id="op-a2">—</td>
+                        <td id="op-e2">—</td>
+                        <td id="op-T2">—</td>
+                    </tr>
+                    <tr class="row-arr">
+                        <td>ARRIVAL</td>
+                        <td id="op-a3">—</td>
+                        <td id="op-e3">—</td>
+                        <td id="op-T3">—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 2. ΔV Budget -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">ΔV Budget</span>
+                <span class="panel-tag" id="dv-panel-tag">AWAITING SOLVER</span>
+            </div>
+            <div class="dv-row">
+                <span class="dv-label">Δv₁ &nbsp;departure burn</span>
+                <span class="dv-val" id="dv1"><span class="pending-val">phase 2</span></span>
+            </div>
+            <div class="dv-row">
+                <span class="dv-label">Δv₂ &nbsp;arrival burn</span>
+                <span class="dv-val" id="dv2"><span class="pending-val">phase 2</span></span>
+            </div>
+            <div class="dv-row">
+                <span class="dv-label">TOTAL ΔV</span>
+                <span class="dv-val total-val" id="dvtot"><span class="pending-val">—</span></span>
+            </div>
+        </div>
+
+        <!-- 3. Math Walkthrough -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Math Walkthrough</span>
+                <button class="expand-btn" id="math-btn">EXPAND</button>
+            </div>
+            <div id="math-body" class="math-body" style="display:none;">
+                <div class="math-step">
+                    <div class="step-label">① Inputs</div>
+                    <div id="ms1"><span class="math-pending">Run solver to see values</span></div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">② Geometry</div>
+                    <div id="ms2"><span class="math-pending">chord · semi-perimeter · A</span></div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">③ Newton-Raphson convergence</div>
+                    <div id="ms3"><span class="math-pending">z via Stumpff C(z), S(z)</span></div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">④ Lagrange coefficients</div>
+                    <div id="ms4"><span class="math-pending">f · g · ġ → v₁, v₂</span></div>
+                </div>
+                <div class="math-step">
+                    <div class="step-label">⑤ Outputs</div>
+                    <div id="ms5"><span class="math-pending">v₁ · v₂ · Δv</span></div>
+                </div>
+                <div id="hohmann-callout" class="hohmann-callout">
+                    <span class="hoh-star">★</span>This is a Hohmann Transfer — the minimum-energy solution for these orbits
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. ΔV vs ToF Chart -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">ΔV vs Time of Flight</span>
+            </div>
+            <canvas id="dv-tof-canvas"></canvas>
+            <div class="chart-note">AVAILABLE AFTER PHASE 2</div>
+        </div>
+
+        <!-- 5. Legend -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Legend</span>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#00d4ff;"></div>
+                    <span>Satellite A — departure orbit</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ff8c42;"></div>
+                    <span>Satellite B — arrival orbit</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#ffd700;"></div>
+                    <span>Transfer orbit</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#4aed88; height:1px;"></div>
+                    <span>Δv₁ — departure burn</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#ff4a6a; height:1px;"></div>
+                    <span>Δv₂ — arrival burn</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ffffff; width:8px; height:8px;"></div>
+                    <span>Spacecraft (animation)</span>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /side-panel -->
+</div><!-- /main -->
+
+<!-- ════════════════ BOTTOM BAR ════════════════ -->
+<div id="bottom-bar">
+    <div class="tof-info">
+        <div class="tof-title">TIME OF FLIGHT</div>
+        <div class="tof-value" id="tof-display">—<span class="tof-unit">hrs</span></div>
+    </div>
+    <input type="range" id="tof-slider" min="0" max="100" value="50" disabled>
+    <div class="bar-buttons">
+        <button class="bar-btn" id="btn-animate">▶ ANIMATE</button>
+        <button class="bar-btn" id="btn-hohmann">HOHMANN</button>
+        <button class="bar-btn" id="btn-reset-view">RESET VIEW</button>
+    </div>
+</div>
+
+<!-- ════════════════ SCRIPT ════════════════ -->
+<script>
+'use strict';
+
+// ================================================================
+// PHYSICAL CONSTANTS
+// ================================================================
+const MU           = 3.986004418e5;  // km³/s²  (Earth GM)
+const EARTH_RADIUS = 6371;           // km
+const TWO_PI       = Math.PI * 2;
+
+// ================================================================
+// EARTH TEXTURE
+// ================================================================
+const earthImg = new Image();
+earthImg.src = 'earth top view.jpg';
+earthImg.onload = () => { if (state.initialized) render(); };
+
+const moonImg = new Image();
+moonImg.src = 'moon no background.001.png';
+moonImg.onload = () => { if (state.initialized) render(); };
+
+// ================================================================
+// APPLICATION STATE
+//   All mutable data lives here so later phases can extend cleanly.
+// ================================================================
+const state = {
+
+    // ── Satellite A (departure, cyan) ──
+    satA: {
+        orbit:  { a: EARTH_RADIUS + 400, e: 0, omega: 0 },
+        nu:     Math.PI * 0.25,   // true anomaly (rad)
+        color:  '#00d4ff',
+        name:   'SAT A',
+        r:      6,                // canvas dot radius px
+    },
+
+    // ── Satellite B (arrival, orange) ──
+    satB: {
+        orbit:  { a: EARTH_RADIUS + 20000, e: 0, omega: 0 },
+        nu:     Math.PI * 1.35,
+        color:  '#ff8c42',
+        name:   'SAT B',
+        r:      6,
+    },
+
+    // ── Moon ──
+    moon: {
+        orbit:  { a: 384400, e: 0.0549, omega: Math.PI * 0.3 },  // real semi-major axis & eccentricity
+        nu:     Math.PI * 0.7,   // starting true anomaly
+        radius: 1737,            // km (real lunar radius)
+        imgScale: 1.0,           // no background — fills circle exactly
+    },
+
+    // ── Transfer orbit (populated by Lambert solver in Phase 2) ──
+    transfer: {
+        valid:  false,
+        orbit:  null,
+        v1:     null,
+        v2:     null,
+        dv1mag: null,
+        dv2mag: null,
+        tof:    null,
+    },
+
+    // ── Camera ──
+    camera: { x: 0, y: 0, scale: 1 },
+
+    // ── Interaction ──
+    isPanning:    false,
+    panStart:     { cx: 0, cy: 0, camX: 0, camY: 0 },
+    mouseWorld:   { x: 0, y: 0 },
+    dragSat:      null,   // 'satA' | 'satB' | null
+    dragOrbit:    null,   // 'satA' | 'satB' | null — dragging orbit circle to resize
+    tweenStart:   0,      // performance.now() of last interaction — drives fade-in
+
+    // ── Star field (generated once) ──
+    stars: [],
+
+    // ── Animation & time warp ──
+    anim: {
+        lastTime:   null,    // performance.now() of last rAF frame
+        simTime:    0,       // accumulated simulation time (seconds)
+        warpIndex:  0,       // index into warpLevels
+        warpLevels: [1, 100, 500, 1000, 5000, 10000, 50000, 100000, 150000],
+        warpLabels: ['1×', '100×', '500×', '1k×', '5k×', '10k×', '50k×', '100k×', '150k×'],
+    },
+
+    // ── Transfer animation (Phase 6) ──
+    txAnim: {
+        active:    false,
+        progress:  0,       // 0 → 1 along the transfer arc
+        wallStart: null,    // performance.now() when animation started
+        duration:  4000,    // ms real-time for full transfer
+    },
+
+    // ── Misc ──
+    initialized: false,
+};
+
+// ================================================================
+// CANVAS SETUP
+// ================================================================
+const canvas = document.getElementById('mainCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+    const wrapper = document.getElementById('canvas-wrapper');
+    canvas.width  = wrapper.clientWidth;
+    canvas.height = wrapper.clientHeight;
+
+    if (!state.initialized) {
+        resetView();
+        state.initialized = true;
+    }
+
+    render();
+}
+
+// ================================================================
+// COORDINATE TRANSFORMS  (world = km, y-up; canvas = px, y-down)
+// ================================================================
+function worldToCanvas(wx, wy) {
+    return [
+        canvas.width  / 2 + (wx - state.camera.x) * state.camera.scale,
+        canvas.height / 2 - (wy - state.camera.y) * state.camera.scale,
+    ];
+}
+
+function canvasToWorld(cx, cy) {
+    return [
+        (cx - canvas.width  / 2) / state.camera.scale + state.camera.x,
+       -((cy - canvas.height / 2) / state.camera.scale) + state.camera.y,
+    ];
+}
+
+function km2px(d) { return d * state.camera.scale; }
+
+// ================================================================
+// ORBITAL MECHANICS HELPERS
+// ================================================================
+
+// Position vector (km) at true anomaly ν on given orbit
+function orbitPos(orbit, nu) {
+    const { a, e, omega } = orbit;
+    const p = a * (1 - e * e);                    // semi-latus rectum
+    const r = p / (1 + e * Math.cos(nu));         // radial distance
+    return { x: r * Math.cos(nu + omega),
+             y: r * Math.sin(nu + omega) };
+}
+
+// Circular orbit speed (km/s) at radius r
+function vcircular(r) { return Math.sqrt(MU / r); }
+
+// Orbital period (s) from semi-major axis
+function period(a) { return TWO_PI * Math.sqrt(a * a * a / MU); }
+
+// Default Hohmann ToF between two circular orbit radii (half-period of transfer ellipse)
+function hohmannToF(a1, a2) {
+    const at = (a1 + a2) / 2;
+    return Math.PI * Math.sqrt(at * at * at / MU);
+}
+
+// Velocity vector [vx, vy] km/s at true anomaly nu on given orbit (inertial frame)
+function orbitVelocity(orbit, nu) {
+    const { a, e, omega } = orbit;
+    const p  = a * (1 - e * e);
+    const sq = Math.sqrt(MU / p);
+    // Perifocal frame
+    const vpx = -Math.sin(nu) * sq;
+    const vpy = (e + Math.cos(nu)) * sq;
+    // Rotate to inertial frame by omega
+    return [
+        vpx * Math.cos(omega) - vpy * Math.sin(omega),
+        vpx * Math.sin(omega) + vpy * Math.cos(omega),
+    ];
+}
+
+// Derive Keplerian elements {a, e, omega} from position r=[x,y] and velocity v=[vx,vy]
+function stateToOrbit(r, v) {
+    const rmag  = Math.hypot(r[0], r[1]);
+    const vmag2 = v[0]*v[0] + v[1]*v[1];
+    const rdotv = r[0]*v[0] + r[1]*v[1];
+    // Vis-viva → semi-major axis
+    const a = 1 / (2/rmag - vmag2/MU);
+    // Eccentricity vector
+    const ex = (vmag2/MU - 1/rmag)*r[0] - (rdotv/MU)*v[0];
+    const ey = (vmag2/MU - 1/rmag)*r[1] - (rdotv/MU)*v[1];
+    const e  = Math.hypot(ex, ey);
+    // Argument of periapsis
+    const omega = Math.atan2(ey, ex);
+    return { a, e, omega };
+}
+
+// True anomaly of position r on orbit (from angle in inertial frame)
+function posToNU(orbit, r) {
+    let nu = Math.atan2(r[1], r[0]) - orbit.omega;
+    while (nu <  0)       nu += TWO_PI;
+    while (nu >= TWO_PI)  nu -= TWO_PI;
+    return nu;
+}
+
+// ================================================================
+// TRANSFER COMPUTATION
+// ================================================================
+
+function computeTransfer() {
+    const posA = orbitPos(state.satA.orbit, state.satA.nu);
+    const posB = orbitPos(state.satB.orbit, state.satB.nu);
+    const r1   = [posA.x, posA.y];
+    const r2   = [posB.x, posB.y];
+
+    // ToF: use stored value (set by slider in Phase 4) or Hohmann default
+    const tof = (state.transfer.tof !== null)
+        ? state.transfer.tof
+        : hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+
+    const sol = lambertSolve(r1, r2, tof, true);
+
+    if (!sol.converged || !sol.v1) {
+        state.transfer.valid = false;
+        state.transfer.error = (sol.debug && sol.debug.error) || 'No solution';
+        return;
+    }
+
+    // Transfer orbit elements from departure state vector
+    const xferOrbit = stateToOrbit(r1, sol.v1);
+
+    // Current satellite velocity vectors
+    const vA = orbitVelocity(state.satA.orbit, state.satA.nu);
+    const vB = orbitVelocity(state.satB.orbit, state.satB.nu);
+
+    // ΔV vectors (km/s)
+    const dv1 = [sol.v1[0] - vA[0], sol.v1[1] - vA[1]];
+    const dv2 = [vB[0] - sol.v2[0], vB[1] - sol.v2[1]];
+
+    // Check if transfer orbit periapsis dips below Earth's surface
+    const periapsis     = xferOrbit.a * (1 - xferOrbit.e);
+    const impactsEarth  = periapsis < EARTH_RADIUS;
+
+    Object.assign(state.transfer, {
+        valid:       true,
+        error:       null,
+        orbit:       xferOrbit,
+        v1:          sol.v1,
+        v2:          sol.v2,
+        dv1,  dv2,
+        dv1mag:      Math.hypot(dv1[0], dv1[1]) * 1000,  // m/s
+        dv2mag:      Math.hypot(dv2[0], dv2[1]) * 1000,
+        tof,
+        r1, r2,
+        vsat1:       vA,
+        vsat2:       vB,
+        solverIters: sol.iters,
+        solverDebug: sol.debug,
+        impactsEarth,
+        periapsis,
+    });
+}
+
+// ================================================================
+// LAMBERT SOLVER  (Bate / Mueller / White universal variable method)
+// ================================================================
+
+// Stumpff functions  C(z) and S(z)
+function stumpffC(z) {
+    if (z > 1e-6)  return (1 - Math.cos(Math.sqrt(z)))  / z;
+    if (z < -1e-6) return (Math.cosh(Math.sqrt(-z)) - 1) / (-z);
+    return 0.5; // limit as z→0
+}
+
+function stumpffS(z) {
+    if (z > 1e-6) {
+        const sq = Math.sqrt(z);
+        return (sq - Math.sin(sq)) / (sq * sq * sq);
+    }
+    if (z < -1e-6) {
+        const sq = Math.sqrt(-z);
+        return (Math.sinh(sq) - sq) / (sq * sq * sq);
+    }
+    return 1/6; // limit as z→0
+}
+
+/**
+ * Lambert solver — universal variable formulation.
+ *
+ * @param {number[]} r1   [x,y] km  departure position
+ * @param {number[]} r2   [x,y] km  arrival  position
+ * @param {number}   tof  seconds   time of flight
+ * @param {boolean}  prograde       true = short-way (prograde)
+ * @returns {{ v1:[x,y], v2:[x,y], converged:bool, iters:number, debug:object }}
+ */
+function lambertSolve(r1, r2, tof, prograde = true) {
+    const r1mag = Math.hypot(r1[0], r1[1]);
+    const r2mag = Math.hypot(r2[0], r2[1]);
+
+    // Cross product (2-D: only z-component)
+    const cross = r1[0] * r2[1] - r1[1] * r2[0];
+
+    // Transfer angle Δθ
+    let cosNU = (r1[0]*r2[0] + r1[1]*r2[1]) / (r1mag * r2mag);
+    cosNU = Math.max(-1, Math.min(1, cosNU)); // clamp for numerical safety
+    let dnu = Math.acos(cosNU);
+    if (prograde) {
+        if (cross < 0) dnu = TWO_PI - dnu;
+    } else {
+        if (cross >= 0) dnu = TWO_PI - dnu;
+    }
+
+    // Fully degenerate: 0° or 360° transfer
+    if (Math.abs(dnu) < 1e-9 || Math.abs(dnu - TWO_PI) < 1e-9) {
+        return { v1: null, v2: null, converged: false, iters: 0,
+                 debug: { error: 'Degenerate: 0° transfer' } };
+    }
+
+    // Near-180° (Hohmann) — solve analytically to avoid A≈0 degeneracy
+    if (Math.abs(dnu - Math.PI) < 0.015) {
+        const at  = (r1mag + r2mag) / 2;
+        const vp  = Math.sqrt(MU * (2/r1mag - 1/at));  // speed at periapsis
+        const va  = Math.sqrt(MU * (2/r2mag - 1/at));  // speed at apoapsis
+        // Prograde tangent directions
+        const a1  = Math.atan2(r1[1], r1[0]);
+        const a2  = Math.atan2(r2[1], r2[0]);
+        const v1  = [-Math.sin(a1)*vp,  Math.cos(a1)*vp];
+        const v2  = [-Math.sin(a2)*va,  Math.cos(a2)*va];
+        return { v1, v2, converged: true, iters: 0,
+                 debug: { dnu: dnu*180/Math.PI, special: 'near-Hohmann analytical' } };
+    }
+
+    const A = Math.sin(dnu) * Math.sqrt(r1mag * r2mag / (1 - Math.cos(dnu)));
+
+    // Helper: compute transfer time for a given universal variable z
+    const tofAtZ = (z) => {
+        const C = stumpffC(z);
+        const S = stumpffS(z);
+        const y = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
+        if (y < 0) return NaN;
+        const sqrtY = Math.sqrt(y);
+        const chi = sqrtY / Math.sqrt(C);
+        return (chi*chi*chi*S + A*sqrtY) / Math.sqrt(MU);
+    };
+
+    // Initial guess: z=0 (parabolic). For shorter ToF, shift to z>0 (elliptic).
+    const t0 = tofAtZ(0);
+    let z = (!isNaN(t0) && tof < t0) ? 1.5 : 0;
+
+    const TOL  = 1e-8;
+    const ITER = 60;
+    let converged = false;
+    let iters     = 0;
+    let t_curr    = NaN;
+    const iterLog = []; // capture up to 8 iterations for math panel
+
+    for (let i = 0; i < ITER; i++) {
+        t_curr = tofAtZ(z);
+
+        // y < 0: back off towards z=0
+        if (isNaN(t_curr)) { z -= 0.2; continue; }
+
+        const F = t_curr - tof;
+        if (iterLog.length < 8) {
+            const Ci = stumpffC(z), Si = stumpffS(z);
+            const yi = r1mag + r2mag + A * (z * Si - 1) / Math.sqrt(Ci);
+            iterLog.push({ iter: iterLog.length + 1, z, Cz: Ci, Sz: Si, yz: yi, Fz: F });
+        }
+        if (Math.abs(F) < TOL) { converged = true; iters = i + 1; break; }
+
+        // Numerical central-difference derivative dt/dz
+        const h  = 1e-5 * (1 + Math.abs(z));
+        let tp   = tofAtZ(z + h);
+        let tm   = tofAtZ(z - h);
+        if (isNaN(tp)) tp = t_curr;
+        if (isNaN(tm)) tm = t_curr;
+        const dtdz = (tp - tm) / (2 * h);
+
+        if (Math.abs(dtdz) < 1e-20) { iters = i + 1; break; }
+
+        let dz = -F / dtdz;
+        dz = Math.max(-2.0, Math.min(2.0, dz)); // limit step size
+        z += dz;
+        iters = i + 1;
+    }
+    if (!converged && !isNaN(t_curr) && Math.abs(t_curr - tof) < 1e-3) converged = true;
+
+    if (!converged) {
+        return { v1: null, v2: null, converged: false, iters,
+                 debug: { z, t: t_curr, tof, error: 'Did not converge', A, iterations: iterLog } };
+    }
+
+    // Lagrange coefficients
+    const C = stumpffC(z), S = stumpffS(z);
+    const y = r1mag + r2mag + A * (z * S - 1) / Math.sqrt(C);
+    const sqrtY = Math.sqrt(y);
+
+    const f    =  1 - y / r1mag;
+    const g    =  A * sqrtY / Math.sqrt(MU);
+    const gdot =  1 - y / r2mag;
+
+    // Velocities
+    const v1 = [
+        (r2[0] - f * r1[0]) / g,
+        (r2[1] - f * r1[1]) / g,
+    ];
+    const v2 = [
+        (gdot * r2[0] - r1[0]) / g,
+        (gdot * r2[1] - r1[1]) / g,
+    ];
+
+    return { v1, v2, converged, iters,
+             debug: { z, y, f, g, gdot, C, S, dnu: dnu * 180/Math.PI, A, iterations: iterLog } };
+}
+
+// ================================================================
+// VALIDATION  (Hohmann test — run once on load)
+// ================================================================
+
+/**
+ * Hohmann transfer analytical ΔV values for comparison.
+ * From circular orbit a1 to circular orbit a2.
+ */
+function hohmannDV(a1, a2) {
+    const vc1   = vcircular(a1);
+    const vc2   = vcircular(a2);
+    const at    = (a1 + a2) / 2;                      // transfer semi-major axis
+    const vp    = Math.sqrt(MU * (2/a1 - 1/at));      // speed at periapsis of transfer
+    const va    = Math.sqrt(MU * (2/a2 - 1/at));      // speed at apoapsis of transfer
+    const dv1   = Math.abs(vp - vc1);
+    const dv2   = Math.abs(vc2 - va);
+    const tof   = Math.PI * Math.sqrt(at*at*at / MU); // half-period
+    return { dv1, dv2, total: dv1+dv2, tof, vc1, vc2, vp, va, at };
+}
+
+function runValidation() {
+    const a1 = EARTH_RADIUS + 400;    // km
+    const a2 = EARTH_RADIUS + 20000;  // km
+    const h  = hohmannDV(a1, a2);
+
+    // Departure: satellite on a1 at angle 0 (periapsis direction = +x)
+    const r1 = [a1, 0];
+    // Arrival:   satellite on a2, directly opposite (180° transfer)
+    const r2 = [-a2, 0];
+
+    const sol = lambertSolve(r1, r2, h.tof, true);
+
+    const result = { hohmann: h, lambert: null, match: false };
+
+    if (sol.converged) {
+        // v_sat1 at departure: circular, tangent = [0, vc1]
+        const dv1 = Math.hypot(sol.v1[0] - 0, sol.v1[1] - h.vc1) * 1000; // m/s
+        // v_sat2 at arrival: circular, tangent = [0, -vc2] (going in -y at -x position)
+        const dv2 = Math.hypot(sol.v2[0] - 0, sol.v2[1] - (-h.vc2)) * 1000; // m/s
+
+        const dv1_analytic = h.dv1 * 1000;
+        const dv2_analytic = h.dv2 * 1000;
+        const err1 = Math.abs(dv1 - dv1_analytic);
+        const err2 = Math.abs(dv2 - dv2_analytic);
+
+        result.lambert = { dv1, dv2, total: dv1+dv2, iters: sol.iters };
+        result.match   = (err1 < 1.0 && err2 < 1.0); // within 1 m/s
+        result.err1    = err1;
+        result.err2    = err2;
+    } else {
+        result.error = sol.debug.error || 'Solver failed';
+    }
+
+    return result;
+}
+
+// Run validation on load and cache result
+const validation = runValidation();
+
+// ================================================================
+// STAR FIELD
+// ================================================================
+function generateStars(n) {
+    state.stars = [];
+    for (let i = 0; i < n; i++) {
+        state.stars.push({
+            px:   Math.random(),
+            py:   Math.random(),
+            size: Math.random() * 1.4 + 0.3,
+            alpha: Math.random() * 0.65 + 0.15,
+        });
+    }
+}
+
+// ================================================================
+// DRAWING PRIMITIVES
+// ================================================================
+
+function drawBackground() {
+    ctx.fillStyle = '#080818';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawStars() {
+    for (const s of state.stars) {
+        ctx.beginPath();
+        ctx.arc(s.px * canvas.width, s.py * canvas.height, s.size, 0, TWO_PI);
+        ctx.fillStyle = `rgba(200,215,255,${s.alpha})`;
+        ctx.fill();
+    }
+}
+
+function drawCrosshair() {
+    const [cx, cy] = worldToCanvas(0, 0);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(80,120,180,0.12)';
+    ctx.lineWidth   = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy);
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawEarth() {
+    const [cx, cy] = worldToCanvas(0, 0);
+    const r        = km2px(EARTH_RADIUS);
+
+    // Outer atmosphere glow — Kármán line is ~100km = ~1.6% of Earth radius.
+    // Glow extends a bit beyond that for visibility, but kept physically plausible.
+    const atmo = ctx.createRadialGradient(cx, cy, r * 0.97, cx, cy, r * 1.06);
+    atmo.addColorStop(0,   'rgba(80,160,255,0.30)');
+    atmo.addColorStop(0.5, 'rgba(50,120,240,0.12)');
+    atmo.addColorStop(1,   'rgba(20, 80,200,0)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.06, 0, TWO_PI);
+    ctx.fillStyle = atmo;
+    ctx.fill();
+
+    // Clip to Earth circle for texture + overlays
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.clip();
+
+    if (earthImg.complete && earthImg.naturalWidth > 0) {
+        // Scale up so the globe fills the clip circle,
+        // compensating for the black border in the source image.
+        const imgScale = 1.32;
+        ctx.drawImage(earthImg,
+            cx - r * imgScale,
+            cy - r * imgScale,
+            r * 2 * imgScale,
+            r * 2 * imgScale
+        );
+    } else {
+        // Fallback gradient while image loads
+        const body = ctx.createRadialGradient(cx - r * 0.28, cy - r * 0.28, r * 0.08, cx, cy, r);
+        body.addColorStop(0,    '#5aaae8');
+        body.addColorStop(0.35, '#2260b8');
+        body.addColorStop(1,    '#091540');
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, TWO_PI);
+        ctx.fillStyle = body;
+        ctx.fill();
+    }
+
+    // Vignette — darkens edges to give spherical depth
+    const vignette = ctx.createRadialGradient(cx - r * 0.15, cy - r * 0.15, r * 0.2, cx, cy, r);
+    vignette.addColorStop(0,   'rgba(0,0,0,0)');
+    vignette.addColorStop(0.65,'rgba(0,0,0,0.12)');
+    vignette.addColorStop(1,   'rgba(0,0,0,0.70)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.fillStyle = vignette;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Atmosphere rim — thin blue ring, ~100km thick at scale
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.008, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(120,200,255,0.55)';
+    ctx.lineWidth   = Math.max(1.5, r * 0.016);
+    ctx.stroke();
+}
+
+function drawMoon() {
+    const moon     = state.moon;
+    const pos      = orbitPos(moon.orbit, moon.nu);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+
+    // Physical radius in pixels, but enforce a minimum so it's always visible
+    const rPhysical = km2px(moon.radius);
+    const MIN_R     = 5;
+    const r         = Math.max(rPhysical, MIN_R);
+
+    // Skip only if genuinely way off-canvas
+    if (cx < -r * 6 || cx > canvas.width  + r * 6 ||
+        cy < -r * 6 || cy > canvas.height + r * 6) return;
+
+    // Clip and draw texture
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.clip();
+
+    if (moonImg.complete && moonImg.naturalWidth > 0) {
+        // Crop the center square from the source to avoid aspect-ratio distortion
+        const iw   = moonImg.naturalWidth;
+        const ih   = moonImg.naturalHeight;
+        const size = Math.min(iw, ih);
+        const sx   = (iw - size) / 2;
+        const sy   = (ih - size) / 2;
+        const s = 1.08;  // scale up slightly so moon fills to clip edge
+        ctx.drawImage(moonImg, sx, sy, size, size, cx - r * s, cy - r * s, r * 2 * s, r * 2 * s);
+    } else {
+        ctx.fillStyle = '#7a7a72';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, TWO_PI);
+        ctx.fill();
+    }
+
+    // Vignette for spherical depth (no atmosphere on Moon)
+    const vig = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 0.1, cx, cy, r);
+    vig.addColorStop(0,   'rgba(0,0,0,0)');
+    vig.addColorStop(0.6, 'rgba(0,0,0,0.12)');
+    vig.addColorStop(1,   'rgba(0,0,0,0.72)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.fillStyle = vig;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Edge stroke
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(180,180,160,0.35)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+
+    // Label — always visible regardless of size
+    ctx.font      = '10px Courier New';
+    ctx.fillStyle = 'rgba(200,200,180,0.75)';
+    ctx.fillText('MOON', cx + r + 5, cy + 4);
+}
+
+function drawOrbit(orbit, color, lineWidth, dash = []) {
+    const steps = 720;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash(dash);
+    ctx.lineWidth   = lineWidth;
+    ctx.strokeStyle = color;
+
+    for (let i = 0; i <= steps; i++) {
+        const nu  = (i / steps) * TWO_PI;
+        const pos = orbitPos(orbit, nu);
+        const [cx, cy] = worldToCanvas(pos.x, pos.y);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+function drawOrbitLabel(orbit, nu, text, color) {
+    const pos = orbitPos(orbit, nu);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+    ctx.save();
+    ctx.font      = '10px Courier New';
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6;
+    ctx.fillText(text, cx + 5, cy - 5);
+    ctx.restore();
+}
+
+function drawSatellite(sat) {
+    const pos      = orbitPos(sat.orbit, sat.nu);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+    const r        = sat.r;
+
+    // Glow
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 4);
+    glow.addColorStop(0,   sat.color + 'bb');
+    glow.addColorStop(0.4, sat.color + '44');
+    glow.addColorStop(1,   sat.color + '00');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 4, 0, TWO_PI);
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    // Body
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.fillStyle   = sat.color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+
+    // Label
+    ctx.font      = 'bold 11px Courier New';
+    ctx.fillStyle = sat.color;
+    ctx.fillText(sat.name, cx + r + 6, cy - r + 1);
+}
+
+// Scale bar in bottom-right corner
+function drawScaleBar() {
+    // Target ~100px wide. Find the nearest "nice" km value.
+    const targetKm = 100 / state.camera.scale;
+    const exp  = Math.floor(Math.log10(targetKm));
+    const pow  = Math.pow(10, exp);
+    const frac = targetKm / pow;
+    let nice;
+    if      (frac < 1.5) nice = pow;
+    else if (frac < 3.5) nice = 2 * pow;
+    else if (frac < 7.5) nice = 5 * pow;
+    else                 nice = 10 * pow;
+
+    const barPx     = km2px(nice);
+    const rightEdge = canvas.width - 20;
+    const bx        = rightEdge - barPx;   // bar anchored to right edge
+    const by        = canvas.height - 28;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(150,170,210,0.6)';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx,         by);
+    ctx.lineTo(bx + barPx, by);
+    ctx.moveTo(bx,         by - 5); ctx.lineTo(bx,         by + 5);
+    ctx.moveTo(bx + barPx, by - 5); ctx.lineTo(bx + barPx, by + 5);
+    ctx.stroke();
+
+    let label;
+    if      (nice >= 1e6)  label = `${(nice / 1e6).toFixed(0)} M km`;
+    else if (nice >= 1000) label = `${(nice / 1000).toFixed(nice >= 10000 ? 0 : 1)}k km`;
+    else                   label = `${nice.toFixed(0)} km`;
+
+    ctx.font      = '9px Courier New';
+    ctx.fillStyle = 'rgba(150,170,210,0.7)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, bx + barPx / 2, by - 8);
+    ctx.restore();
+}
+
+// ================================================================
+// TRANSFER VISUALIZATION
+// ================================================================
+
+/**
+ * Draw an arrow from world point (x0w,y0w) to (x1w,y1w).
+ * headSizePx defaults to 10.
+ */
+function drawArrow(x0w, y0w, x1w, y1w, color, lineWidthPx, headSizePx) {
+    const [x0, y0] = worldToCanvas(x0w, y0w);
+    const [x1, y1] = worldToCanvas(x1w, y1w);
+    const dx  = x1 - x0;
+    const dy  = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    if (len < 3) return;
+
+    const head  = Math.min(headSizePx || 10, len * 0.45);
+    const angle = Math.atan2(dy, dx);
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle   = color;
+    ctx.lineWidth   = lineWidthPx || 1.5;
+    ctx.lineCap     = 'round';
+
+    // Shaft (stop short of tip so head doesn't overlap)
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1 - Math.cos(angle) * head * 0.75,
+               y1 - Math.sin(angle) * head * 0.75);
+    ctx.stroke();
+
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - head * Math.cos(angle - 0.38),
+               y1 - head * Math.sin(angle - 0.38));
+    ctx.lineTo(x1 - head * Math.cos(angle + 0.38),
+               y1 - head * Math.sin(angle + 0.38));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+/**
+ * Draw all transfer-orbit visuals: ellipse arc, ΔV arrows, velocity triangle.
+ * Zoom-invariant arrow lengths: DV_PX px per km/s, VEL_PX px per km/s.
+ */
+function drawTransfer() {
+    const t = state.transfer;
+    if (!t.valid) return;
+
+    const orb = t.orbit;
+    const sc  = state.camera.scale;
+
+    // Smooth tween: fade in over 150ms after each interaction event
+    const tweenAlpha = state.tweenStart
+        ? Math.min(1, (performance.now() - state.tweenStart) / 150)
+        : 1;
+
+    // World-units per km/s for each arrow class (zoom-invariant screen size)
+    const DV_WORLD  = 80  / sc;   // ΔV arrows:  80 px / (km/s)
+    const VEL_WORLD = 11  / sc;   // full-v arrows: 11 px / (km/s)
+
+    ctx.save();
+    ctx.globalAlpha = tweenAlpha;
+
+    // ── Full transfer ellipse (faint dashed) ──
+    drawOrbit(orb, 'rgba(255,215,0,0.20)', 1, [5, 7]);
+
+    // ── Transfer arc r1→r2 (solid gold) ──
+    const nu1 = posToNU(orb, t.r1);
+    const nu2 = posToNU(orb, t.r2);
+    let   arc = nu2 - nu1;
+    if (arc <= 0) arc += TWO_PI;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth   = 2.5;
+    ctx.shadowColor = 'rgba(255,215,0,0.5)';
+    ctx.shadowBlur  = 8;
+    const ARC_STEPS = 400;
+    for (let i = 0; i <= ARC_STEPS; i++) {
+        const nu  = nu1 + (i / ARC_STEPS) * arc;
+        const pos = orbitPos(orb, nu);
+        const [cx, cy] = worldToCanvas(pos.x, pos.y);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // ── Departure marker ──
+    const [d1cx, d1cy] = worldToCanvas(t.r1[0], t.r1[1]);
+    ctx.beginPath();
+    ctx.arc(d1cx, d1cy, 5, 0, TWO_PI);
+    ctx.fillStyle = '#ffd700';
+    ctx.fill();
+
+    // ── Arrival marker ──
+    const [d2cx, d2cy] = worldToCanvas(t.r2[0], t.r2[1]);
+    ctx.beginPath();
+    ctx.arc(d2cx, d2cy, 5, 0, TWO_PI);
+    ctx.fillStyle = '#ff4a6a';
+    ctx.fill();
+
+    // ── Velocity vector triangle at departure ──
+    // Vectors originate at SAT A position.
+    // v_sat1 (cyan), v_transfer1 (gold), ΔV1 = difference (green)
+    const vs1e = [t.r1[0] + t.vsat1[0] * VEL_WORLD,
+                  t.r1[1] + t.vsat1[1] * VEL_WORLD];
+    const vt1e = [t.r1[0] + t.v1[0]    * VEL_WORLD,
+                  t.r1[1] + t.v1[1]    * VEL_WORLD];
+
+    drawArrow(t.r1[0], t.r1[1], vs1e[0], vs1e[1],
+              state.satA.color + 'cc', 1.5, 7);           // v_sat1 cyan
+    drawArrow(t.r1[0], t.r1[1], vt1e[0], vt1e[1],
+              'rgba(255,215,0,0.85)', 1.5, 7);             // v_transfer1 gold
+    drawArrow(vs1e[0], vs1e[1], vt1e[0], vt1e[1],
+              '#4aed88', 2, 8);                             // ΔV1 green (tip-to-tip)
+
+    // ── ΔV arrows at departure and arrival ──
+    // ΔV1 also shown as standalone arrow from satellite (scaled separately)
+    const dv1e = [t.r1[0] + t.dv1[0] * DV_WORLD,
+                  t.r1[1] + t.dv1[1] * DV_WORLD];
+    const dv2e = [t.r2[0] + t.dv2[0] * DV_WORLD,
+                  t.r2[1] + t.dv2[1] * DV_WORLD];
+
+    drawArrow(t.r1[0], t.r1[1], dv1e[0], dv1e[1], '#4aed88', 2.5, 11);  // Δv1 green
+    drawArrow(t.r2[0], t.r2[1], dv2e[0], dv2e[1], '#ff4a6a', 2.5, 11);  // Δv2 red
+
+    ctx.restore(); // end tween alpha
+
+}
+
+// ================================================================
+// PHASE 6 — SPACECRAFT, BURN FLASHES, ORBIT LABELS, MISSION CLOCK
+// ================================================================
+
+/** Draw spacecraft triangle at canvas (cx,cy) facing velAngle (radians, canvas coords) */
+function drawSpacecraft(cx, cy, velAngle) {
+    const S = 9; // half-size px
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(velAngle + Math.PI / 2);
+
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(0,       -S * 1.6);  // nose
+    ctx.lineTo(-S * 0.7, S * 0.8);  // left wing tip
+    ctx.lineTo(0,        S * 0.2);  // tail notch
+    ctx.lineTo( S * 0.7, S * 0.8);  // right wing tip
+    ctx.closePath();
+
+    ctx.fillStyle   = '#ffffff';
+    ctx.shadowColor = 'rgba(255,255,255,0.9)';
+    ctx.shadowBlur  = 14;
+    ctx.fill();
+
+    // Engine glow trail
+    ctx.beginPath();
+    ctx.moveTo(-S * 0.25, S * 0.5);
+    ctx.lineTo(0,         S * 2.2);
+    ctx.lineTo( S * 0.25, S * 0.5);
+    ctx.fillStyle   = 'rgba(255,180,60,0.55)';
+    ctx.shadowColor = 'rgba(255,160,40,0.8)';
+    ctx.shadowBlur  = 10;
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/** Flash ring at a world position — intensity 0–1 */
+function drawBurnFlash(worldX, worldY, color, intensity) {
+    if (intensity <= 0) return;
+    const [cx, cy] = worldToCanvas(worldX, worldY);
+    ctx.save();
+    ctx.globalAlpha = intensity;
+
+    // Expanding ring
+    const R = 18 + (1 - intensity) * 22;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, TWO_PI);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 20;
+    ctx.stroke();
+
+    // Inner bright circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, TWO_PI);
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/** Mission elapsed time HUD during transfer animation */
+function drawMissionClock(elapsedSec) {
+    const days = Math.floor(elapsedSec / 86400);
+    const hrs  = Math.floor((elapsedSec % 86400) / 3600);
+    const mins = Math.floor((elapsedSec % 3600) / 60);
+    const secs = Math.floor(elapsedSec % 60);
+    const label = `MET  ${String(days).padStart(2,'0')}d ${String(hrs).padStart(2,'0')}h ${String(mins).padStart(2,'0')}m ${String(secs).padStart(2,'0')}s`;
+
+    ctx.save();
+    ctx.font = 'bold 12px Courier New';
+    const w = ctx.measureText(label).width + 24;
+    const h = 32;
+    const x = (canvas.width - w) / 2;
+    const y = 16;
+
+    ctx.fillStyle   = 'rgba(8,8,24,0.82)';
+    ctx.strokeStyle = 'rgba(255,215,0,0.6)';
+    ctx.lineWidth   = 1;
+    roundRect(ctx, x, y, w, h, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle    = '#ffd700';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, canvas.width / 2, y + h / 2);
+    ctx.restore();
+}
+
+/** Draw named orbit labels on the canvas */
+function drawOrbitNames() {
+    const sc = state.camera.scale;
+
+    // Helper: place text at angle nu on a given orbit, offset outward
+    function orbitNameLabel(orbit, nu, text, color) {
+        const pos   = orbitPos(orbit, nu);
+        const dist  = Math.hypot(pos.x, pos.y);
+        const outset = 14 / sc;                     // offset outward in world units
+        const wx    = pos.x * (1 + outset / dist);
+        const wy    = pos.y * (1 + outset / dist);
+        const [cx, cy] = worldToCanvas(wx, wy);
+        ctx.save();
+        ctx.font         = '10px Courier New';
+        ctx.fillStyle    = color;
+        ctx.globalAlpha  = 0.75;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, cx, cy);
+        ctx.restore();
+    }
+
+    orbitNameLabel(state.satA.orbit, Math.PI * 1.25, 'DEPARTURE ORBIT', state.satA.color);
+    orbitNameLabel(state.satB.orbit, Math.PI * 1.25, 'ARRIVAL ORBIT',   state.satB.color);
+
+    // Transfer orbit label — midpoint of the arc
+    const t = state.transfer;
+    if (t.valid) {
+        const nu1  = posToNU(t.orbit, t.r1);
+        const nu2  = posToNU(t.orbit, t.r2);
+        let   arc  = nu2 - nu1;
+        if (arc <= 0) arc += TWO_PI;
+        const nuMid = nu1 + arc * 0.5;
+        orbitNameLabel(t.orbit, nuMid, 'TRANSFER ORBIT', '#ffd700');
+    }
+}
+
+/** Draw spacecraft along transfer arc during animation */
+function drawTransferAnimation() {
+    const a   = state.txAnim;
+    const t   = state.transfer;
+    if (!t.valid) return;
+
+    const orb = t.orbit;
+    const nu1 = posToNU(orb, t.r1);
+    const nu2 = posToNU(orb, t.r2);
+    let   arc = nu2 - nu1;
+    if (arc <= 0) arc += TWO_PI;
+
+    const nuNow  = nu1 + a.progress * arc;
+    const pos    = orbitPos(orb, nuNow);
+    const [cx, cy] = worldToCanvas(pos.x, pos.y);
+
+    // Velocity direction for heading
+    const vel      = orbitVelocity(orb, nuNow);
+    const velAngle = Math.atan2(-vel[1], vel[0]); // canvas y is flipped
+    drawSpacecraft(cx, cy, velAngle);
+
+    // Departure burn flash (first 8% of animation)
+    if (a.progress < 0.08) {
+        drawBurnFlash(t.r1[0], t.r1[1], '#4aed88', 1 - a.progress / 0.08);
+    }
+    // Arrival burn flash (last 8% of animation)
+    if (a.progress > 0.92) {
+        drawBurnFlash(t.r2[0], t.r2[1], '#ff4a6a', (a.progress - 0.92) / 0.08);
+    }
+
+    // Mission elapsed time
+    drawMissionClock(a.progress * t.tof);
+}
+
+// ================================================================
+// TIME WARP INDICATOR
+// ================================================================
+function drawTimeWarp() {
+    const { warpIndex, warpLevels, warpLabels, simTime } = state.anim;
+    const levels = warpLabels;
+    const n      = levels.length;
+
+    const pad  = 14;
+    const x    = pad;
+    const y    = pad;
+
+    ctx.save();
+
+    // ── Sim time string ──
+    const totalSec = Math.floor(simTime);
+    const days  = Math.floor(totalSec / 86400);
+    const hrs   = Math.floor((totalSec % 86400) / 3600);
+    const mins  = Math.floor((totalSec % 3600)  / 60);
+    const secs  = totalSec % 60;
+    const timeStr = `${String(days).padStart(3,'0')}d  ${String(hrs).padStart(2,'0')}h  ${String(mins).padStart(2,'0')}m  ${String(secs).padStart(2,'0')}s`;
+
+    // ── Measure layout ──
+    ctx.font = 'bold 11px Courier New';
+    const cellW  = 44;
+    const cellH  = 20;
+    const barW   = n * cellW + (n - 1) * 3;
+    const boxH   = 54;
+    const boxW   = Math.max(barW, 220);
+
+    // Background
+    ctx.fillStyle   = 'rgba(8,8,24,0.82)';
+    ctx.strokeStyle = 'rgba(40,60,100,0.7)';
+    ctx.lineWidth   = 1;
+    roundRect(ctx, x, y, boxW, boxH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // ── Warp level label ──
+    const mult   = warpLevels[warpIndex];
+    const isWarp = mult > 1;
+    ctx.font      = 'bold 13px Courier New';
+    ctx.fillStyle = isWarp ? '#ffd700' : '#00d4ff';
+    ctx.textAlign = 'left';
+    ctx.fillText('TIME WARP', x + 10, y + 16);
+
+    ctx.font      = 'bold 13px Courier New';
+    ctx.fillStyle = isWarp ? '#ffd700' : '#b8c8e0';
+    ctx.textAlign = 'right';
+    ctx.fillText(warpLabels[warpIndex], x + boxW - 10, y + 16);
+
+    // ── Level pip bar ──
+    const pipY  = y + 24;
+    const pipW  = (boxW - 20) / n - 3;
+    for (let i = 0; i < n; i++) {
+        const px = x + 10 + i * (pipW + 3);
+        const active = i <= warpIndex;
+        ctx.fillStyle = active
+            ? (isWarp ? '#ffd700' : '#00d4ff')
+            : 'rgba(80,100,140,0.35)';
+        ctx.fillRect(px, pipY, pipW, 4);
+    }
+
+    // ── Sim time ──
+    ctx.font      = '10px Courier New';
+    ctx.fillStyle = 'rgba(160,180,210,0.75)';
+    ctx.textAlign = 'left';
+    ctx.fillText(timeStr, x + 10, y + boxH - 8);
+
+    // ── Key hints ──
+    ctx.font      = '9px Courier New';
+    ctx.fillStyle = 'rgba(80,100,140,0.8)';
+    ctx.textAlign = 'right';
+    ctx.fillText('[,] slower  [.] faster', x + boxW - 10, y + boxH - 8);
+
+    ctx.restore();
+}
+
+// Helper — rounded rectangle path
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y,     x + w, y + r,     r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x,     y + h, x,     y + h - r, r);
+    ctx.lineTo(x,     y + r);
+    ctx.arcTo(x,     y,     x + r, y,         r);
+    ctx.closePath();
+}
+
+// ================================================================
+// ANIMATION LOOP
+// ================================================================
+
+// Mean motion (rad/s) for a circular or near-circular orbit
+function meanMotion(a) { return Math.sqrt(MU / (a * a * a)); }
+
+function animLoop(timestamp) {
+    if (state.anim.lastTime !== null) {
+        const realDt = (timestamp - state.anim.lastTime) / 1000; // wall-clock seconds
+        // Cap real dt to avoid huge jumps after tab focus restored
+        const dt     = Math.min(realDt, 0.1) * state.anim.warpLevels[state.anim.warpIndex];
+
+        state.anim.simTime += dt;
+
+        // Advance true anomalies — skip whichever satellite is being dragged
+        // Also freeze satellites while transfer animation is running
+        if (state.dragSat !== 'satA' && !state.txAnim.active)
+            state.satA.nu = (state.satA.nu + meanMotion(state.satA.orbit.a) * dt) % TWO_PI;
+        if (state.dragSat !== 'satB' && !state.txAnim.active)
+            state.satB.nu = (state.satB.nu + meanMotion(state.satB.orbit.a) * dt) % TWO_PI;
+        state.moon.nu = (state.moon.nu + meanMotion(state.moon.orbit.a) * dt) % TWO_PI;
+
+        // Transfer animation progress
+        if (state.txAnim.active) {
+            state.txAnim.progress = Math.min(1,
+                (timestamp - state.txAnim.wallStart) / state.txAnim.duration);
+            if (state.txAnim.progress >= 1) {
+                state.txAnim.active = false;
+                document.getElementById('btn-animate').classList.remove('btn-active');
+                document.getElementById('btn-animate').textContent = '▶ ANIMATE';
+            }
+        }
+
+        render();
+    }
+    state.anim.lastTime = timestamp;
+    requestAnimationFrame(animLoop);
+}
+
+// ================================================================
+// MAIN RENDER
+// ================================================================
+function render() {
+    // Recompute transfer for current satellite positions every frame
+    computeTransfer();
+
+    drawBackground();
+    drawStars();
+    drawCrosshair();
+
+    // Moon orbit (dashed — drawn first so everything sits on top)
+    drawOrbit(state.moon.orbit, 'rgba(180,180,160,0.30)', 1, [5, 8]);
+
+    // Satellite orbits
+    drawOrbit(state.satA.orbit, state.satA.color + '50', 1.5);
+    drawOrbit(state.satB.orbit, state.satB.color + '50', 1.5);
+
+    // Transfer orbit + ΔV arrows (behind Moon and Earth)
+    drawTransfer();
+
+    // Moon (behind Earth)
+    drawMoon();
+
+    // Earth
+    drawEarth();
+
+    // Orbit altitude labels
+    drawOrbitLabel(state.satA.orbit, Math.PI * 1.75,
+        `${(state.satA.orbit.a - EARTH_RADIUS).toFixed(0)} km`, state.satA.color);
+    drawOrbitLabel(state.satB.orbit, Math.PI * 1.75,
+        `${(state.satB.orbit.a - EARTH_RADIUS).toFixed(0)} km`, state.satB.color);
+
+    // Orbit names (drawn before satellites so they don't cover dots)
+    drawOrbitNames();
+
+    // Satellites (on top of everything)
+    drawSatellite(state.satA);
+    drawSatellite(state.satB);
+
+    // Transfer animation — spacecraft, burn flashes, mission clock
+    if (state.txAnim.active || state.txAnim.progress > 0) {
+        drawTransferAnimation();
+    }
+
+    // Scale bar
+    drawScaleBar();
+
+    // Time warp indicator
+    drawTimeWarp();
+
+    // Solver failure warning (above everything)
+    drawSolverWarning();
+
+    // Impact marker — must be last so it's never occluded by Earth
+    drawImpactMarker();
+
+    updateOverlay();
+    updatePanels();
+}
+
+// ================================================================
+// PANEL UPDATES
+// ================================================================
+// Throttle panel DOM updates — no need to update at 60fps
+let _panelFrame = 0;
+function updatePanels() {
+    if (++_panelFrame % 3 !== 0) return; // update every 3rd frame (~20fps)
+
+    const a1 = state.satA.orbit.a;
+    const a3 = state.satB.orbit.a;
+
+    // Departure orbit
+    document.getElementById('op-a1').textContent = Math.round(a1).toLocaleString('en');
+    document.getElementById('op-e1').textContent = state.satA.orbit.e.toFixed(3);
+    document.getElementById('op-T1').textContent = (period(a1) / 60).toFixed(1);
+
+    // Arrival orbit
+    document.getElementById('op-a3').textContent = Math.round(a3).toLocaleString('en');
+    document.getElementById('op-e3').textContent = state.satB.orbit.e.toFixed(3);
+    document.getElementById('op-T3').textContent = (period(a3) / 60).toFixed(1);
+
+    const t = state.transfer;
+    if (t.valid) {
+        const orb = t.orbit;
+
+        // Transfer orbit row
+        document.getElementById('op-a2').textContent = Math.round(orb.a).toLocaleString('en');
+        document.getElementById('op-e2').textContent = orb.e.toFixed(3);
+        document.getElementById('op-T2').textContent = (t.tof / 60).toFixed(1); // actual ToF
+
+        // ΔV budget
+        document.getElementById('dv1').textContent    = t.dv1mag.toFixed(1) + ' m/s';
+        document.getElementById('dv2').textContent    = t.dv2mag.toFixed(1) + ' m/s';
+        document.getElementById('dvtot').textContent  = (t.dv1mag + t.dv2mag).toFixed(1) + ' m/s';
+        document.getElementById('dv-panel-tag').textContent   = 'LIVE';
+        document.getElementById('dv-panel-tag').style.color   = 'var(--green)';
+        document.getElementById('dv-panel-tag').style.borderColor = 'var(--green)';
+    } else {
+        document.getElementById('op-a2').textContent = '—';
+        document.getElementById('op-e2').textContent = '—';
+        document.getElementById('op-T2').textContent = '—';
+        const errMsg = t.error || '—';
+        document.getElementById('dv1').innerHTML   = `<span class="pending-val">${errMsg}</span>`;
+        document.getElementById('dv2').innerHTML   = `<span class="pending-val">—</span>`;
+        document.getElementById('dvtot').innerHTML = `<span class="pending-val">—</span>`;
+        document.getElementById('dv-panel-tag').textContent = 'NO SOLUTION';
+        document.getElementById('dv-panel-tag').style.color = 'var(--red)';
+        document.getElementById('dv-panel-tag').style.borderColor = 'var(--red)';
+    }
+
+    // Math walkthrough (only when body is visible — avoids wasted DOM work)
+    if (document.getElementById('math-body').style.display !== 'none') {
+        updateMathPanel();
+    }
+
+    // ΔV vs ToF chart
+    drawDvTofChart();
+}
+
+// Keep the old name as alias for the init call below
+function updateOrbitPanel() { updatePanels(); }
+
+function updateOverlay() {
+    // Compute zoom relative to initial "fit" scale
+    const outerR   = state.satB.orbit.a;
+    const fitScale = Math.min(canvas.width, canvas.height) / (2 * outerR * 1.4);
+    const zoom     = (state.camera.scale / fitScale).toFixed(2);
+
+    document.getElementById('ov-zoom').textContent   = `${zoom}×`;
+    document.getElementById('ov-coords').textContent =
+        `${state.mouseWorld.x.toFixed(0)}, ${state.mouseWorld.y.toFixed(0)} km`;
+}
+
+// ================================================================
+// PHASE 5 — MATH WALKTHROUGH, HOHMANN DETECTION, CHART
+// ================================================================
+
+// ── Expand / collapse math panel ──
+document.getElementById('math-btn').addEventListener('click', () => {
+    const body = document.getElementById('math-body');
+    const btn  = document.getElementById('math-btn');
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    btn.textContent    = open ? 'EXPAND' : 'COLLAPSE';
+    // Populate immediately when opening so user doesn't see stale "—" values
+    if (!open) updateMathPanel();
+});
+
+// ── Detect approximate Hohmann transfer ──
+function isHohmannTransfer() {
+    const t = state.transfer;
+    if (!t.valid) return false;
+    const db  = t.solverDebug;
+    const eA  = state.satA.orbit.e;
+    const eB  = state.satB.orbit.e;
+    const near180 = (db && db.special === 'near-Hohmann analytical') ||
+                    (db && typeof db.dnu === 'number' && Math.abs(db.dnu - 180) < 1.5);
+    const circular = eA < 0.02 && eB < 0.02;
+    const hToF     = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const onTime   = t.tof / hToF > 0.96 && t.tof / hToF < 1.04;
+    return near180 && circular && onTime;
+}
+
+// ── Helper: build one step-row HTML line ──
+function srow(label, value, tip) {
+    const tipAttr = tip ? ` class="has-tip" data-tip="${tip}"` : '';
+    return `<div class="step-row"><span class="step-var"${tipAttr}>${label}</span><span class="step-num">${value}</span></div>`;
+}
+
+// ── Update math walkthrough panel ──
+function updateMathPanel() {
+    const t  = state.transfer;
+    const db = t.solverDebug;
+
+    if (!t.valid || !db) {
+        ['ms1','ms2','ms3','ms4','ms5'].forEach(id => {
+            document.getElementById(id).innerHTML = '<span class="math-pending">—</span>';
+        });
+        document.getElementById('hohmann-callout').style.display = 'none';
+        return;
+    }
+
+    const r1mag = Math.hypot(t.r1[0], t.r1[1]);
+    const r2mag = Math.hypot(t.r2[0], t.r2[1]);
+    const dnuDeg = typeof db.dnu === 'number' ? db.dnu.toFixed(2) + '°' : '180.00° (analytical)';
+
+    // ① Inputs
+    document.getElementById('ms1').innerHTML =
+        srow('|r₁|', r1mag.toFixed(1) + ' km') +
+        srow('|r₂|', r2mag.toFixed(1) + ' km') +
+        srow('Δθ',   dnuDeg) +
+        srow('ToF',  (t.tof / 3600).toFixed(4) + ' hr');
+
+    // ② Geometry
+    const chord = Math.hypot(t.r2[0]-t.r1[0], t.r2[1]-t.r1[1]);
+    const semi  = (r1mag + r2mag + chord) / 2;
+    const Aval  = typeof db.A === 'number' ? db.A.toFixed(1) + ' km' : '—';
+    document.getElementById('ms2').innerHTML =
+        srow('chord c', chord.toFixed(1) + ' km') +
+        srow('semi-perim s', semi.toFixed(1) + ' km') +
+        srow('<span class="has-tip" data-tip="Geometric parameter: A = sin(Δθ)·√(r₁r₂/(1−cos Δθ)). Encodes the transfer geometry; drives the Newton-Raphson target function.">A</span>',
+             Aval);
+
+    // ③ Newton-Raphson iterations
+    if (db.special === 'near-Hohmann analytical') {
+        document.getElementById('ms3').innerHTML =
+            '<span class="math-pending">Solved analytically — transfer angle ≈ 180°; iterative z skipped.</span>';
+    } else if (db.iterations && db.iterations.length) {
+        let html = `<table class="iter-table"><thead><tr>
+            <th>#</th>
+            <th><span class="has-tip" data-tip="Universal variable z = αχ², where α = 1/a (semi-major axis reciprocal) and χ is the universal variable. z > 0 → elliptic, z = 0 → parabolic, z < 0 → hyperbolic.">z</span></th>
+            <th><span class="has-tip" data-tip="Stumpff function C(z) = (1 − cos√z)/z. Generalises the cosine series to any orbit type. At z=0, C=½.">C(z)</span></th>
+            <th><span class="has-tip" data-tip="Stumpff function S(z) = (√z − sin√z)/z^(3/2). Generalises the sine series. At z=0, S=⅙.">S(z)</span></th>
+            <th>F(z)</th>
+        </tr></thead><tbody>`;
+        for (const it of db.iterations) {
+            html += `<tr><td>${it.iter}</td><td>${it.z.toFixed(5)}</td><td>${it.Cz.toFixed(5)}</td><td>${it.Sz.toFixed(5)}</td><td>${it.Fz.toExponential(2)}</td></tr>`;
+        }
+        html += `</tbody></table><div class="iter-converged">✓ converged in ${t.solverIters} iteration${t.solverIters === 1 ? '' : 's'}</div>`;
+        document.getElementById('ms3').innerHTML = html;
+    } else {
+        document.getElementById('ms3').innerHTML = '<span class="math-pending">—</span>';
+    }
+
+    // ④ Lagrange coefficients
+    const { f, g, gdot, z: zFinal, y: yFinal } = db;
+    document.getElementById('ms4').innerHTML =
+        srow('<span class="has-tip" data-tip="Lagrange f: f = 1 − y/|r₁|. Dimensionless scalar that propagates r₁ forward to r₂ without integrating the full EOM.">f</span>',
+             typeof f === 'number' ? f.toFixed(7) : '—') +
+        srow('<span class="has-tip" data-tip="Lagrange g: g = A·√(y/μ), units of seconds. Together with f, gives: r₂ = f·r₁ + g·v₁.">g</span>',
+             typeof g === 'number' ? g.toFixed(2) + ' s' : '—') +
+        srow('<span class="has-tip" data-tip="Lagrange ġ: ġ = 1 − y/|r₂|. Used to recover v₂: v₂ = (ġ·r₂ − r₁)/g.">ġ</span>',
+             typeof gdot === 'number' ? gdot.toFixed(7) : '—') +
+        srow('z*', typeof zFinal === 'number' ? zFinal.toFixed(6) : '—') +
+        srow('y*', typeof yFinal === 'number' ? yFinal.toFixed(1) + ' km' : '—');
+
+    // ⑤ Outputs
+    const v1 = t.v1, v2 = t.v2;
+    document.getElementById('ms5').innerHTML =
+        srow('v₁', `[${v1[0].toFixed(3)}, ${v1[1].toFixed(3)}] km/s`) +
+        srow('v₂', `[${v2[0].toFixed(3)}, ${v2[1].toFixed(3)}] km/s`) +
+        srow('<span class="has-tip" data-tip="Departure burn Δv₁: difference between transfer-orbit velocity and circular-orbit velocity at r₁. Applied prograde to begin the transfer.">Δv₁</span>',
+             t.dv1mag.toFixed(1) + ' m/s') +
+        srow('<span class="has-tip" data-tip="Arrival burn Δv₂: difference between circular-orbit velocity and transfer-orbit velocity at r₂. Applied prograde to circularise into the destination orbit.">Δv₂</span>',
+             t.dv2mag.toFixed(1) + ' m/s');
+
+    // Hohmann callout
+    document.getElementById('hohmann-callout').style.display =
+        isHohmannTransfer() ? 'block' : 'none';
+
+    // Re-attach tooltip listeners for dynamically added elements
+    attachTipListeners();
+}
+
+// ── Tooltip system ──
+const tipEl = document.getElementById('tooltip-popup');
+
+function attachTipListeners() {
+    document.querySelectorAll('.has-tip:not([data-tip-bound])').forEach(el => {
+        el.setAttribute('data-tip-bound', '1');
+        el.addEventListener('mouseenter', (e) => {
+            tipEl.textContent = el.dataset.tip;
+            tipEl.style.display = 'block';
+            positionTip(e);
+        });
+        el.addEventListener('mousemove', positionTip);
+        el.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+    });
+}
+
+function positionTip(e) {
+    const x = e.clientX + 14;
+    const y = e.clientY - 8;
+    tipEl.style.left = Math.min(x, window.innerWidth - 224) + 'px';
+    tipEl.style.top  = y + 'px';
+}
+
+// ── ΔV vs ToF chart ──
+let _dvCurveDirty = true;
+let _dvCurve      = null;
+
+function markDvCurveDirty() { _dvCurveDirty = true; }
+
+function buildDvCurve() {
+    const N    = 70;
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const r1   = state.transfer.r1 || (() => { const p = orbitPos(state.satA.orbit, state.satA.nu); return [p.x, p.y]; })();
+    const r2   = state.transfer.r2 || (() => { const p = orbitPos(state.satB.orbit, state.satB.nu); return [p.x, p.y]; })();
+    const tMin = hToF * 0.12;
+    const tMax = hToF * 4.0;
+    const pts  = [];
+    for (let i = 0; i <= N; i++) {
+        const tof = tMin + (tMax - tMin) * (i / N);
+        const sol = lambertSolve(r1, r2, tof, true);
+        if (sol.converged && sol.v1) {
+            const vA  = orbitVelocity(state.satA.orbit, state.satA.nu);
+            const vB  = orbitVelocity(state.satB.orbit, state.satB.nu);
+            const dv1 = Math.hypot(sol.v1[0]-vA[0], sol.v1[1]-vA[1]) * 1000;
+            const dv2 = Math.hypot(vB[0]-sol.v2[0], vB[1]-sol.v2[1]) * 1000;
+            pts.push({ tof, dv: dv1 + dv2 });
+        } else {
+            pts.push({ tof, dv: null });
+        }
+    }
+    return pts;
+}
+
+function drawDvTofChart() {
+    const chartCanvas = document.getElementById('dv-tof-canvas');
+    if (!chartCanvas) return;
+    const rect = chartCanvas.getBoundingClientRect();
+    chartCanvas.width  = Math.round(rect.width)  || 308;
+    chartCanvas.height = Math.round(rect.height) || 130;
+    const cw = chartCanvas.width, ch = chartCanvas.height;
+    const cc = chartCanvas.getContext('2d');
+
+    if (_dvCurveDirty) { _dvCurve = buildDvCurve(); _dvCurveDirty = false; }
+
+    const pts   = _dvCurve;
+    const valid = pts.filter(p => p.dv !== null);
+
+    // Clear
+    cc.fillStyle = '#080816';
+    cc.fillRect(0, 0, cw, ch);
+
+    if (!valid.length) {
+        cc.font = '10px Courier New'; cc.fillStyle = '#2a3a60';
+        cc.textAlign = 'center'; cc.fillText('No solution data', cw/2, ch/2);
+        return;
+    }
+
+    const PAD  = { l: 44, r: 12, t: 12, b: 26 };
+    const pw   = cw - PAD.l - PAD.r;
+    const ph   = ch - PAD.t - PAD.b;
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const tMin = pts[0].tof, tMax = pts[pts.length-1].tof;
+    const dvMin = Math.min(...valid.map(p => p.dv));
+    const dvMax = Math.max(...valid.map(p => p.dv));
+    const dvSpan = dvMax - dvMin || 1;
+
+    const toX  = tof => PAD.l + pw * (tof - tMin) / (tMax - tMin);
+    const toY  = dv  => PAD.t + ph * (1 - (dv - dvMin) / dvSpan);
+
+    // Grid
+    cc.strokeStyle = 'rgba(26,37,64,0.9)'; cc.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const gy = PAD.t + ph * i / 4;
+        cc.beginPath(); cc.moveTo(PAD.l, gy); cc.lineTo(PAD.l + pw, gy); cc.stroke();
+    }
+
+    // Axes
+    cc.strokeStyle = 'rgba(74,96,128,0.7)'; cc.lineWidth = 1;
+    cc.beginPath();
+    cc.moveTo(PAD.l, PAD.t); cc.lineTo(PAD.l, PAD.t + ph); cc.lineTo(PAD.l + pw, PAD.t + ph);
+    cc.stroke();
+
+    // Y-axis labels
+    cc.font = '9px Courier New'; cc.fillStyle = 'rgba(74,96,128,0.9)';
+    cc.textAlign = 'right'; cc.textBaseline = 'middle';
+    for (let i = 0; i <= 4; i++) {
+        const dv = dvMax - dvSpan * (i / 4);
+        cc.fillText(Math.round(dv), PAD.l - 4, PAD.t + ph * (i / 4));
+    }
+
+    // X-axis tick labels (multiples of Hohmann)
+    cc.textAlign = 'center'; cc.textBaseline = 'top';
+    for (const f of [0.5, 1, 2, 3, 4]) {
+        const tx = hToF * f;
+        if (tx < tMin || tx > tMax) continue;
+        const gx = toX(tx);
+        cc.fillText((tx/3600).toFixed(1)+'h', gx, PAD.t + ph + 5);
+        cc.strokeStyle = 'rgba(40,60,90,0.5)';
+        cc.beginPath(); cc.moveTo(gx, PAD.t); cc.lineTo(gx, PAD.t + ph); cc.stroke();
+    }
+
+    // Axis titles
+    cc.font = '8px Courier New'; cc.fillStyle = 'rgba(74,96,128,0.7)';
+    cc.textAlign = 'right'; cc.textBaseline = 'bottom';
+    cc.fillText('m/s', PAD.l - 2, PAD.t);
+    cc.textAlign = 'right'; cc.textBaseline = 'bottom';
+    cc.fillText('ToF', PAD.l + pw, PAD.t + ph + ph);
+
+    // Hohmann dashed vertical
+    if (hToF >= tMin && hToF <= tMax) {
+        const hx = toX(hToF);
+        cc.save();
+        cc.strokeStyle = 'rgba(255,215,0,0.3)'; cc.lineWidth = 1;
+        cc.setLineDash([3,4]);
+        cc.beginPath(); cc.moveTo(hx, PAD.t); cc.lineTo(hx, PAD.t + ph); cc.stroke();
+        cc.setLineDash([]);
+        cc.font = '8px Courier New'; cc.fillStyle = 'rgba(255,215,0,0.5)';
+        cc.textAlign = 'center'; cc.textBaseline = 'top';
+        cc.fillText('HOH', hx, PAD.t + 1);
+        cc.restore();
+    }
+
+    // Curve
+    cc.beginPath();
+    cc.strokeStyle = '#ffd700'; cc.lineWidth = 1.5;
+    let first = true;
+    for (const p of pts) {
+        if (p.dv === null) { first = true; continue; }
+        const x = toX(p.tof), y = toY(p.dv);
+        first ? (cc.moveTo(x, y), first = false) : cc.lineTo(x, y);
+    }
+    cc.stroke();
+
+    // Current ToF dot
+    if (state.transfer.valid && state.transfer.tof) {
+        const cx = toX(state.transfer.tof);
+        const cy = toY(state.transfer.dv1mag + state.transfer.dv2mag);
+        if (cx >= PAD.l && cx <= PAD.l + pw) {
+            cc.beginPath();
+            cc.arc(cx, cy, 4.5, 0, Math.PI * 2);
+            cc.fillStyle    = '#00d4ff';
+            cc.shadowColor  = 'rgba(0,212,255,0.7)';
+            cc.shadowBlur   = 8;
+            cc.fill();
+            cc.shadowBlur = 0;
+        }
+    }
+}
+
+
+// ================================================================
+// VIEW RESET
+// ================================================================
+function resetView() {
+    const outerR = state.satB.orbit.a;
+    state.camera.x     = 0;
+    state.camera.y     = 0;
+    state.camera.scale = Math.min(canvas.width, canvas.height) / (2 * outerR * 1.4);
+}
+
+// ================================================================
+// PHASE 4 HELPERS
+// ================================================================
+
+// ── ToF slider mapping (piecewise: 0→0.1×Hoh, 50→1.0×Hoh, 100→4.0×Hoh) ──
+function sliderToToF(value) {
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const v    = Number(value);
+    const frac = v <= 50
+        ? 0.1 + (v / 50)        * 0.9
+        : 1.0 + ((v - 50) / 50) * 3.0;
+    return hToF * frac;
+}
+
+function toFToSlider(tof) {
+    const hToF = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    const frac = tof / hToF;
+    return frac <= 1
+        ? ((frac - 0.1) / 0.9) * 50
+        : 50 + ((frac - 1.0) / 3.0) * 50;
+}
+
+function updateToFDisplay(tof) {
+    const hrs = tof / 3600;
+    document.getElementById('tof-display').innerHTML =
+        `${hrs.toFixed(2)}<span class="tof-unit">hrs</span>`;
+}
+
+// ── Satellite hit test — returns 'satA' | 'satB' | null ──
+function hitTestSatellite(cxPx, cyPx) {
+    const HIT_R = 20; // px — generous for easy grabbing
+    for (const key of ['satA', 'satB']) {
+        const sat = state[key];
+        const pos = orbitPos(sat.orbit, sat.nu);
+        const [sx, sy] = worldToCanvas(pos.x, pos.y);
+        if (Math.hypot(cxPx - sx, cyPx - sy) < HIT_R) return key;
+    }
+    return null;
+}
+
+// ── Orbit ring hit test — returns 'satA' | 'satB' | null ──
+function hitTestOrbit(cxPx, cyPx) {
+    const TOL = 8; // px from the ring
+    const [wx, wy] = canvasToWorld(cxPx, cyPx);
+    const distWorld = Math.hypot(wx, wy);
+    for (const key of ['satA', 'satB']) {
+        const a = state[key].orbit.a;
+        // Convert orbit radius to screen pixels for tolerance comparison
+        const ringPx = a * state.camera.scale;
+        const mousePx = distWorld * state.camera.scale;
+        if (Math.abs(mousePx - ringPx) < TOL) return key;
+    }
+    return null;
+}
+
+// ── Snap satellite nu to the angle from Earth center toward (wx,wy) ──
+function snapNuToMouse(sat, wx, wy) {
+    let nu = Math.atan2(wy, wx) - sat.orbit.omega;
+    while (nu <  0)       nu += TWO_PI;
+    while (nu >= TWO_PI)  nu -= TWO_PI;
+    return nu;
+}
+
+// ── Periapsis impact marker — drawn on top of everything ──
+function drawImpactMarker() {
+    const t = state.transfer;
+    if (!t.valid || !t.impactsEarth) return;
+
+    const periPos      = orbitPos(t.orbit, 0);
+    const [px, py]     = worldToCanvas(periPos.x, periPos.y);
+    const R            = 14;
+
+    ctx.save();
+
+    // Outer glow ring
+    ctx.beginPath();
+    ctx.arc(px, py, R + 6, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(255,74,106,0.25)';
+    ctx.lineWidth   = 8;
+    ctx.stroke();
+
+    // X cross
+    ctx.strokeStyle = '#ff4a6a';
+    ctx.lineWidth   = 3;
+    ctx.shadowColor = 'rgba(255,74,106,0.9)';
+    ctx.shadowBlur  = 16;
+    ctx.lineCap     = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px - R, py - R); ctx.lineTo(px + R, py + R);
+    ctx.moveTo(px + R, py - R); ctx.lineTo(px - R, py + R);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // Label with background pill
+    const label = 'IMPACT';
+    ctx.font = 'bold 12px Courier New';
+    const lw = ctx.measureText(label).width;
+    const lx = px + R + 10;
+    const ly = py;
+
+    ctx.fillStyle = 'rgba(20,5,10,0.75)';
+    roundRect(ctx, lx - 4, ly - 9, lw + 8, 18, 3);
+    ctx.fill();
+
+    ctx.fillStyle    = '#ff4a6a';
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, lx, ly);
+
+    ctx.restore();
+}
+
+// ── Warning banner helper ──
+function drawWarningBanner(msg, yBottom, color) {
+    const padX = 18;
+    ctx.save();
+    ctx.font = 'bold 12px Courier New';
+    const w = ctx.measureText(msg).width + padX * 2;
+    const h = 36;
+    const x = (canvas.width - w) / 2;
+    const y = yBottom - h;
+
+    ctx.fillStyle   = `rgba(${color},0.18)`;
+    ctx.strokeStyle = `rgba(${color},0.65)`;
+    ctx.lineWidth   = 1;
+    roundRect(ctx, x, y, w, h, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle    = `rgb(${color})`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(msg, canvas.width / 2, y + h / 2);
+    ctx.restore();
+    return y; // return top edge so next banner can stack above
+}
+
+// ── Solver warning overlay ──
+function drawSolverWarning() {
+    const t = state.transfer;
+    let yBottom = canvas.height - 80;
+
+    if (!t.valid && t.error) {
+        yBottom = drawWarningBanner(`⚠  ${t.error}`, yBottom, '255,74,106') - 6;
+    }
+
+    if (t.valid && t.impactsEarth) {
+        const alt = Math.round(t.periapsis - EARTH_RADIUS);
+        drawWarningBanner(
+            `⚠  TRAJECTORY INTERSECTS EARTH  (periapsis ${alt < 0 ? alt : '+' + alt} km)`,
+            yBottom, '255,160,30'
+        );
+    }
+}
+
+// ================================================================
+// EVENT HANDLERS
+// ================================================================
+
+// Zoom toward mouse
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.88 : 1.12;
+
+    // World coords under mouse before zoom
+    const [wx, wy] = canvasToWorld(e.offsetX, e.offsetY);
+
+    state.camera.scale *= factor;
+
+    // Keep world point under mouse fixed after zoom
+    state.camera.x = wx - (e.offsetX - canvas.width  / 2) / state.camera.scale;
+    state.camera.y = wy + (e.offsetY - canvas.height / 2) / state.camera.scale;
+
+    render();
+}, { passive: false });
+
+// Mousedown — satellite drag > orbit resize > pan
+canvas.addEventListener('mousedown', (e) => {
+    const hitSat   = hitTestSatellite(e.offsetX, e.offsetY);
+    const hitOrbit = hitTestOrbit(e.offsetX, e.offsetY);
+    if (hitSat) {
+        state.dragSat = hitSat;
+        canvas.style.cursor = 'crosshair';
+    } else if (hitOrbit) {
+        state.dragOrbit = hitOrbit;
+        canvas.style.cursor = 'ns-resize';
+    } else {
+        state.isPanning = true;
+        state.panStart  = {
+            cx: e.offsetX, cy: e.offsetY,
+            camX: state.camera.x, camY: state.camera.y,
+        };
+        canvas.classList.add('panning');
+    }
+});
+
+// Mousemove — drag satellite OR pan OR hover
+canvas.addEventListener('mousemove', (e) => {
+    const [wx, wy]   = canvasToWorld(e.offsetX, e.offsetY);
+    state.mouseWorld = { x: wx, y: wy };
+
+    if (state.dragSat) {
+        // Snap satellite to the angle from Earth toward mouse
+        state[state.dragSat].nu = snapNuToMouse(state[state.dragSat], wx, wy);
+        state.tweenStart = performance.now();
+        markDvCurveDirty();
+        render();
+
+    } else if (state.dragOrbit) {
+        // Set orbit radius to mouse's distance from Earth center
+        const MIN_R = EARTH_RADIUS + 100;    // just above surface
+        const MAX_R = EARTH_RADIUS + 500000; // generous upper bound
+        const newR  = Math.max(MIN_R, Math.min(MAX_R, Math.hypot(wx, wy)));
+        state[state.dragOrbit].orbit.a = newR;
+        // Rescale ToF to preserve the same fraction of Hohmann time
+        state.transfer.tof = sliderToToF(tofSlider.value);
+        updateToFDisplay(state.transfer.tof);
+        state.tweenStart = performance.now();
+        markDvCurveDirty();
+        render();
+
+    } else if (state.isPanning) {
+        const dx = (e.offsetX - state.panStart.cx) / state.camera.scale;
+        const dy = (e.offsetY - state.panStart.cy) / state.camera.scale;
+        state.camera.x = state.panStart.camX - dx;
+        state.camera.y = state.panStart.camY + dy;
+        render();
+
+    } else {
+        // Hover cursor: pointer over satellites, resize over orbit rings, grab elsewhere
+        const hitSat   = hitTestSatellite(e.offsetX, e.offsetY);
+        const hitOrbit = !hitSat && hitTestOrbit(e.offsetX, e.offsetY);
+        canvas.style.cursor = hitSat ? 'pointer' : hitOrbit ? 'ns-resize' : 'grab';
+        updateOverlay();
+    }
+});
+
+function endInteraction() {
+    state.dragSat     = null;
+    state.dragOrbit   = null;
+    state.isPanning   = false;
+    canvas.style.cursor = 'grab';
+    canvas.classList.remove('panning');
+}
+
+canvas.addEventListener('mouseup',    endInteraction);
+canvas.addEventListener('mouseleave', endInteraction);
+
+// Touch support (pan & pinch)
+let lastTouchDist = null;
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+        const t = e.touches[0];
+        state.isPanning = true;
+        state.panStart  = { cx: t.clientX, cy: t.clientY, camX: state.camera.x, camY: state.camera.y };
+    } else if (e.touches.length === 2) {
+        lastTouchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && state.isPanning) {
+        const t  = e.touches[0];
+        const dx = (t.clientX - state.panStart.cx) / state.camera.scale;
+        const dy = (t.clientY - state.panStart.cy) / state.camera.scale;
+        state.camera.x = state.panStart.camX - dx;
+        state.camera.y = state.panStart.camY + dy;
+        render();
+    } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        if (lastTouchDist) {
+            state.camera.scale *= dist / lastTouchDist;
+            render();
+        }
+        lastTouchDist = dist;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { state.isPanning = false; lastTouchDist = null; });
+
+
+// Reset view button
+document.getElementById('btn-reset-view').addEventListener('click', () => {
+    resetView();
+    render();
+});
+
+// ── ToF slider ──
+const tofSlider = document.getElementById('tof-slider');
+tofSlider.disabled = false;
+
+tofSlider.addEventListener('input', () => {
+    state.transfer.tof = sliderToToF(tofSlider.value);
+    updateToFDisplay(state.transfer.tof);
+    state.tweenStart = performance.now();
+    render();
+});
+
+// ── Animate Transfer button ──
+document.getElementById('btn-animate').addEventListener('click', () => {
+    if (!state.transfer.valid) return;
+    const btn = document.getElementById('btn-animate');
+    if (state.txAnim.active) {
+        // Stop animation
+        state.txAnim.active   = false;
+        state.txAnim.progress = 0;
+        btn.classList.remove('btn-active');
+        btn.textContent = '▶ ANIMATE';
+    } else {
+        // Start animation — freeze orbital motion, begin from r1
+        state.txAnim.active   = true;
+        state.txAnim.progress = 0;
+        state.txAnim.wallStart = performance.now();
+        btn.classList.add('btn-active');
+        btn.textContent = '■ STOP';
+    }
+});
+
+// ── Hohmann button — snap both satellites to canonical Hohmann positions ──
+document.getElementById('btn-hohmann').addEventListener('click', () => {
+    // SAT A at nu=0 (right side), SAT B at nu=π (opposite, on its orbit)
+    state.satA.nu = 0;
+    state.satB.nu = Math.PI;
+
+    // Reset ToF to Hohmann value and slider to centre
+    state.transfer.tof = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+    tofSlider.value    = toFToSlider(state.transfer.tof);
+    updateToFDisplay(state.transfer.tof);
+    markDvCurveDirty();
+    render();
+});
+
+// Time warp keys:  , = slower   . = faster  (KSP style)
+document.addEventListener('keydown', (e) => {
+    const a = state.anim;
+    if (e.key === '.') {
+        a.warpIndex = Math.min(a.warpIndex + 1, a.warpLevels.length - 1);
+    } else if (e.key === ',') {
+        a.warpIndex = Math.max(a.warpIndex - 1, 0);
+    }
+});
+
+// ================================================================
+// INIT
+// ================================================================
+generateStars(220);
+updateOrbitPanel();
+
+// Wait for layout to settle before sizing canvas
+window.addEventListener('load', () => {
+    resizeCanvas();
+    drawDvTofChart();
+});
+
+window.addEventListener('resize', () => {
+    resizeCanvas();
+    drawDvTofChart();
+});
+
+// Fallback if load already fired
+if (document.readyState === 'complete') {
+    resizeCanvas();
+    drawDvTofChart();
+}
+
+/* Phase 2 validation panel removed in Phase 6. Logic preserved below for reference.
+(function populateValidation() {
+    const v  = validation;
+    const h  = v.hohmann;
+    const ok = v.match;
+
+    const badge = document.getElementById('val-badge');
+    badge.textContent   = ok ? '✓ PASS' : '✗ FAIL';
+    badge.style.color   = ok ? 'var(--green)' : 'var(--red)';
+    badge.style.borderColor = ok ? 'var(--green)' : 'var(--red)';
+
+    const fmt = n => n.toFixed(2);
+
+    document.getElementById('val-dv1-a').textContent  = fmt(h.dv1  * 1000);
+    document.getElementById('val-dv2-a').textContent  = fmt(h.dv2  * 1000);
+    document.getElementById('val-tot-a').textContent  = fmt(h.total* 1000);
+    document.getElementById('val-iters-a').textContent = 'N/A';
+
+    if (v.lambert) {
+        const l = v.lambert;
+        document.getElementById('val-dv1-l').textContent  = fmt(l.dv1);
+        document.getElementById('val-dv2-l').textContent  = fmt(l.dv2);
+        document.getElementById('val-tot-l').textContent  = fmt(l.total);
+        document.getElementById('val-iters-l').textContent = l.iters;
+
+        const errStyle = v.match ? 'color:var(--green)' : 'color:var(--red)';
+        document.getElementById('val-dv1-e').innerHTML = `<span style="${errStyle}">${fmt(v.err1)}</span>`;
+        document.getElementById('val-dv2-e').innerHTML = `<span style="${errStyle}">${fmt(v.err2)}</span>`;
+        document.getElementById('val-tot-e').innerHTML = `<span style="${errStyle}">${fmt(Math.abs(l.total - h.total*1000))}</span>`;
+    } else {
+        const msg = v.error || 'Solver failed';
+        ['val-dv1-l','val-dv2-l','val-tot-l'].forEach(id => {
+            document.getElementById(id).innerHTML = `<span style="color:var(--red)">${msg}</span>`;
+        });
+    }
+})();
+*/
+
+// Seed transfer ToF with Hohmann default and sync slider
+state.transfer.tof  = hohmannToF(state.satA.orbit.a, state.satB.orbit.a);
+tofSlider.value     = toFToSlider(state.transfer.tof);
+updateToFDisplay(state.transfer.tof);
+
+// Start animation loop
+requestAnimationFrame(animLoop);
+</script>
+</body>
+</html>
