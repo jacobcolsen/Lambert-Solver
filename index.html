@@ -6,25 +6,25 @@
     <title>Lambert Transfers for Babies</title>
     <style>
         /* ══════════════════════════════════════════
-           RESET & ROOT PALETTE
+           RESET & ROOT PALETTE  — light / book style
            ══════════════════════════════════════════ */
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg:      #07071a;
-            --bg-r:    #06060f;
-            --border:  #1a2540;
-            --dim:     #2e4060;
-            --dim2:    #3a5478;
-            --text:    #a8bcd4;
-            --bright:  #ddeeff;
+            /* ── Page tones ── */
+            --bg:        #ffffff;        /* left panel / canvas bg   */
+            --bg-r:      #f7f6f2;        /* right panel: warm white  */
+            --border:    #e2dfd8;        /* panel divider            */
+            --dim:       #aaa89e;        /* muted label color        */
+            --text:      #2e2b26;        /* body text                */
+            --bright:    #111010;        /* headings                 */
 
-            /* ── Brand colors — consistent across all spreads ── */
-            --cyan:    #00d4ff;   /* spacecraft 1 / departure  */
-            --orange:  #ff8c42;   /* spacecraft 2 / target     */
-            --gold:    #ffd700;   /* transfer orbit accent     */
-            --green:   #4aed88;   /* solved / correct path     */
-            --red:     #ff4a6a;
+            /* ── Brand colors (kept consistent across all spreads) ── */
+            --cyan:      #0099bb;   /* spacecraft 1 / departure  */
+            --orange:    #e06820;   /* spacecraft 2 / target     */
+            --gold:      #b89000;   /* transfer orbit / accent   */
+            --green:     #28a060;   /* solved / correct path     */
+            --red:       #cc2244;
         }
 
         html, body {
@@ -37,6 +37,7 @@
         body {
             display: flex;
             flex-direction: column;
+            /* Right-panel body copy uses a humanist serif */
             font-family: Georgia, 'Times New Roman', serif;
         }
 
@@ -57,41 +58,41 @@
             flex-direction: column;
             border-right: 1px solid var(--border);
             overflow: hidden;
+            background: var(--bg);
         }
 
-        /* Baby text zone — top of left panel */
+        /* Baby text zone */
         #baby-area {
             flex-shrink: 0;
-            padding: 26px 36px 20px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(0,0,0,0.18);
+            padding: 36px 44px 0px;
+            /* blends seamlessly with the canvas — no divider */
         }
 
         #baby-text {
             font-family: system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-            font-size: 34px;
+            font-size: 36px;
             font-weight: 800;
-            color: #ffffff;
-            line-height: 1.25;
-            letter-spacing: -0.3px;
+            color: var(--bright);
+            line-height: 1.20;
+            letter-spacing: -0.5px;
         }
 
         #baby-sub {
             font-family: system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
             font-size: 15px;
             font-weight: 400;
-            color: rgba(180,210,255,0.42);
-            margin-top: 7px;
+            color: var(--dim);
+            margin-top: 8px;
             line-height: 1.55;
-            font-style: italic;
         }
 
-        /* Canvas zone — fills rest of left panel */
+        /* Canvas zone */
         #canvas-wrap {
             flex: 1;
             position: relative;
             overflow: hidden;
             cursor: grab;
+            background: var(--bg);
         }
         #canvas-wrap.panning { cursor: grabbing; }
 
@@ -106,30 +107,31 @@
             width: 50%;
             background: var(--bg-r);
             overflow-y: auto;
+            border-left: 1px solid var(--border);
         }
 
         #right-inner {
-            padding: 36px 38px 52px;
+            padding: 40px 42px 56px;
         }
 
         /* Sections */
-        .rs { margin-bottom: 30px; }
+        .rs { margin-bottom: 32px; }
 
         .rs h2 {
-            font-family: 'Courier New', 'Courier', monospace;
+            font-family: system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
             font-size: 10px;
-            font-weight: normal;
-            letter-spacing: 3.5px;
+            font-weight: 700;
+            letter-spacing: 3px;
             text-transform: uppercase;
-            color: var(--dim2);
-            margin-bottom: 14px;
-            padding-bottom: 7px;
-            border-bottom: 1px solid rgba(26,37,64,0.75);
+            color: var(--dim);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }
 
         .rs p {
-            font-size: 13.5px;
-            line-height: 1.85;
+            font-size: 14px;
+            line-height: 1.82;
             color: var(--text);
             margin-bottom: 11px;
         }
@@ -139,12 +141,13 @@
         .eq {
             font-family: 'Courier New', 'Courier', monospace;
             font-size: 13.5px;
-            line-height: 1.9;
-            color: #bcd0ee;
-            background: rgba(255,255,255,0.025);
-            border-left: 2px solid var(--gold);
-            padding: 11px 16px;
-            margin: 15px 0;
+            line-height: 1.95;
+            color: #1e1c18;
+            background: rgba(0,0,0,0.035);
+            border-left: 3px solid var(--gold);
+            padding: 12px 18px;
+            margin: 16px 0;
+            border-radius: 0 3px 3px 0;
         }
         .eq em {
             display: block;
@@ -152,12 +155,15 @@
             font-style: normal;
             letter-spacing: 2.5px;
             text-transform: uppercase;
-            color: var(--dim2);
-            margin-bottom: 5px;
+            color: var(--dim);
+            margin-bottom: 6px;
         }
-        .eq .val { color: var(--gold); font-weight: bold; }
+        .eq .val {
+            color: #7a6000;
+            font-weight: bold;
+        }
 
-        /* Inline colour highlights */
+        /* Inline highlights */
         .hi  { color: var(--cyan);   font-weight: 600; }
         .hig { color: var(--gold); }
         .hio { color: var(--orange); }
@@ -165,13 +171,13 @@
 
         /* Small italic note */
         .note {
-            font-size: 12.5px;
-            color: var(--dim2);
-            line-height: 1.75;
+            font-size: 13px;
+            color: var(--dim);
+            line-height: 1.72;
             font-style: italic;
-            border-left: 2px solid rgba(26,37,64,0.9);
-            padding-left: 12px;
-            margin-top: 10px;
+            border-left: 2px solid var(--border);
+            padding-left: 13px;
+            margin-top: 12px;
         }
 
         /* ══════════════════════════════════════════
@@ -180,68 +186,74 @@
         #bar {
             flex-shrink: 0;
             height: 52px;
-            background: rgba(5,5,18,0.98);
+            background: var(--bg-r);
             border-top: 1px solid var(--border);
             display: flex;
             align-items: center;
-            padding: 0 20px;
+            padding: 0 22px;
             gap: 14px;
         }
 
-        /* Prev / Next buttons */
+        /* Prev / Next */
         .nbtn {
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            letter-spacing: 2px;
+            font-family: system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
             background: none;
-            border: 1px solid var(--border);
-            color: var(--dim2);
-            padding: 5px 15px;
+            border: 1.5px solid var(--border);
+            color: var(--dim);
+            padding: 5px 16px;
             cursor: pointer;
-            border-radius: 2px;
+            border-radius: 4px;
             transition: border-color 0.18s, color 0.18s;
             flex-shrink: 0;
             user-select: none;
         }
-        .nbtn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
-        .nbtn:disabled { opacity: 0.22; cursor: default; }
+        .nbtn:hover:not(:disabled) {
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+        .nbtn:disabled { opacity: 0.30; cursor: default; }
 
-        /* Centre info block */
+        /* Centre */
         #bar-center {
             flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2px;
+            gap: 1px;
         }
         #bar-book {
-            font-family: 'Courier New', monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             font-size: 11px;
-            letter-spacing: 3px;
-            color: var(--dim2);
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--dim);
         }
         #bar-spread {
-            font-family: 'Courier New', monospace;
-            font-size: 9px;
-            letter-spacing: 2px;
-            color: rgba(46,64,96,0.9);
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: #ccc9c2;
         }
 
         /* Speed controls */
         .speed-row {
             display: flex;
             align-items: center;
-            gap: 7px;
+            gap: 8px;
             flex-shrink: 0;
         }
         #pbtn {
-            width: 28px; height: 28px;
+            width: 30px; height: 30px;
             background: none;
-            border: 1px solid var(--border);
-            color: var(--dim2);
-            font-size: 12px;
+            border: 1.5px solid var(--border);
+            color: var(--dim);
+            font-size: 13px;
             cursor: pointer;
-            border-radius: 2px;
+            border-radius: 4px;
             display: flex; align-items: center; justify-content: center;
             transition: border-color 0.18s, color 0.18s;
             user-select: none;
@@ -249,18 +261,19 @@
         #pbtn:hover { border-color: var(--cyan); color: var(--cyan); }
 
         #warp-label {
-            font-family: 'Courier New', monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             font-size: 11px;
-            letter-spacing: 1px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
             color: var(--text);
-            min-width: 40px;
+            min-width: 36px;
             text-align: right;
         }
 
         /* scrollbar */
-        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb { background: #d8d4cc; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -290,16 +303,16 @@
 
 <!-- BOTTOM BAR -->
 <div id="bar">
-    <button class="nbtn" id="btn-prev">◀ PREV</button>
+    <button class="nbtn" id="btn-prev">◀ Prev</button>
     <div id="bar-center">
-        <div id="bar-book">LAMBERT TRANSFERS FOR BABIES</div>
-        <div id="bar-spread">SPREAD 1 OF 1</div>
+        <div id="bar-book">Lambert Transfers for Babies</div>
+        <div id="bar-spread">Spread 1 of 1</div>
     </div>
     <div class="speed-row">
         <button id="pbtn">▶</button>
         <div id="warp-label">1×</div>
     </div>
-    <button class="nbtn" id="btn-next">NEXT ▶</button>
+    <button class="nbtn" id="btn-next">Next ▶</button>
 </div>
 
 <!-- ══════════════════════════════════════════════════
@@ -318,57 +331,29 @@ const RE     = 6371;            // km      — Earth mean radius
 /* ═══════════════════════════════════════════════════
    ASSET LOADING
    ═══════════════════════════════════════════════════ */
-// NASA top-down Earth image.  Slot: replace src string when file is updated.
+// NASA top-down Earth image — replace src if file is renamed.
 const earthImg = new Image();
 earthImg.src   = 'earth top view.jpg';
 earthImg.onload = () => { if (SIM.ready) render(); };
 
 /* ═══════════════════════════════════════════════════
-   STAR FIELD
-   Positions stored as canvas fractions → stars stay
-   fixed behind camera pan/zoom across all spreads.
-   ═══════════════════════════════════════════════════ */
-const STARS = (() => {
-    const a = [];
-    for (let i = 0; i < 280; i++) a.push({
-        px:    Math.random(),
-        py:    Math.random(),
-        r:     0.25 + Math.random() * 1.45,
-        alpha: 0.12 + Math.random() * 0.65,
-    });
-    return a;
-})();
-
-/* ═══════════════════════════════════════════════════
    SIMULATION STATE
-   Single source of truth extended by every spread.
-   Never replaced wholesale — just add keys per spread.
+   Single source of truth; extended per spread.
    ═══════════════════════════════════════════════════ */
 const SIM = {
-    // ── Time / animation ──
-    time:       0,          // accumulated simulation seconds
+    time:       0,
     playing:    true,
     warpIndex:  0,
     warpLevels: [1, 10, 100, 1_000, 10_000],
     warpLabels: ['1×', '10×', '100×', '1k×', '10k×'],
-    lastRaf:    null,       // rAF timestamp of previous frame (ms)
-    ready:      false,      // true once canvas is sized + first spread loaded
-
-    // ── Navigation ──
+    lastRaf:    null,
+    ready:      false,
     spreadIndex: 0,
-
-    // ── Camera  (world = km, y-up;  canvas = px, y-down) ──
     camera: { x: 0, y: 0, scale: 1 },
-
-    // ── Pan drag state ──
-    pan: { active: false, cx0: 0, cy0: 0, camX0: 0, camY0: 0 },
-
-    // ── Mouse position in world coordinates ──
-    mouse: { wx: 0, wy: 0 },
-
-    // ── Per-spread hover / drag state (reset on spread change) ──
-    hover: {},
-    drag:  {},
+    pan:    { active: false, cx0: 0, cy0: 0, camX0: 0, camY0: 0 },
+    mouse:  { wx: 0, wy: 0 },
+    hover:  {},
+    drag:   {},
 };
 
 /* ═══════════════════════════════════════════════════
@@ -385,14 +370,13 @@ function resizeCanvas() {
     if (sp && sp.resetCamera) sp.resetCamera();
 }
 
-/* ── Coordinate transforms ── */
-function w2c(wx, wy) {            // world km → canvas px
+function w2c(wx, wy) {
     return [
         canvas.width  / 2 + (wx - SIM.camera.x) * SIM.camera.scale,
         canvas.height / 2 - (wy - SIM.camera.y) * SIM.camera.scale,
     ];
 }
-function c2w(cx, cy) {            // canvas px → world km
+function c2w(cx, cy) {
     return [
         (cx - canvas.width  / 2) / SIM.camera.scale + SIM.camera.x,
        -((cy - canvas.height / 2) / SIM.camera.scale) + SIM.camera.y,
@@ -402,81 +386,69 @@ function km2px(d) { return d * SIM.camera.scale; }
 
 /* ═══════════════════════════════════════════════════
    SHARED DRAWING PRIMITIVES
-   Used by all spreads — never removed or replaced.
    ═══════════════════════════════════════════════════ */
 
 function drawBg() {
-    ctx.fillStyle = '#07071a';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-function drawStars() {
-    for (const s of STARS) {
-        ctx.beginPath();
-        ctx.arc(s.px * canvas.width, s.py * canvas.height, s.r, 0, TWO_PI);
-        ctx.fillStyle = `rgba(200,215,255,${s.alpha})`;
-        ctx.fill();
-    }
 }
 
 /**
  * drawEarth()
- * Uses the NASA top-down image when available;
- * falls back to a blue gradient sphere placeholder.
- * Pass `t` to animate the subtle atmospheric pulse.
+ * On a white background: clean sphere with an oval drop-shadow below,
+ * NASA image when loaded, gradient placeholder otherwise.
  */
 function drawEarth(t = SIM.time) {
     const [cx, cy] = w2c(0, 0);
     const r        = km2px(RE);
-    const pulse    = 1 + 0.010 * Math.sin(t * 0.65);   // very gentle breath
 
-    // ── Outer atmosphere glow ──
-    const aR   = r * 1.12 * pulse;
-    const atmo = ctx.createRadialGradient(cx, cy, r * 0.93, cx, cy, aR);
-    atmo.addColorStop(0,    'rgba(80,160,255,0.30)');
-    atmo.addColorStop(0.42, 'rgba(50,120,240,0.11)');
-    atmo.addColorStop(1,    'rgba(20,80,200,0)');
+    // ── Oval drop-shadow beneath the globe ──
+    // Mimics the soft ground-shadow in Baby University illustrations.
+    ctx.save();
+    ctx.scale(1, 0.28);           // squash vertically for an oval
     ctx.beginPath();
-    ctx.arc(cx, cy, aR, 0, TWO_PI);
-    ctx.fillStyle = atmo;
+    ctx.arc(cx, (cy + r * 1.18) / 0.28, r * 0.72, 0, TWO_PI);
+    ctx.fillStyle = 'rgba(0,0,0,0.10)';
+    ctx.filter    = 'blur(12px)';
     ctx.fill();
+    ctx.filter = 'none';
+    ctx.restore();
 
-    // ── Globe body (clipped to circle) ──
+    // ── Globe body ──
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, TWO_PI);
     ctx.clip();
 
     if (earthImg.complete && earthImg.naturalWidth > 0) {
-        // ── NASA Earth top-down image ──
-        // Scale up so the photo fills to the clip edge (compensates
-        // for the black border in the source image).
+        // NASA top-down image — scale up so it fills the clip circle
         const s = 1.30;
         ctx.drawImage(earthImg, cx - r*s, cy - r*s, r*2*s, r*2*s);
     } else {
-        // ── Gradient placeholder — replace with NASA image ──
+        // ── Gradient placeholder: soft blue sphere ──
+        // Style: pastel, Baby-University-flavoured
         const body = ctx.createRadialGradient(
-            cx - r*0.28, cy - r*0.28, r*0.06,
+            cx - r*0.32, cy - r*0.32, r*0.04,
             cx, cy, r
         );
-        body.addColorStop(0,    '#5ca8e8');
-        body.addColorStop(0.22, '#2a72c8');
-        body.addColorStop(0.55, '#1848a0');
-        body.addColorStop(1,    '#071232');
+        body.addColorStop(0,    '#a8d8f0');   // light highlight
+        body.addColorStop(0.30, '#6ab4dc');
+        body.addColorStop(0.70, '#3888c0');
+        body.addColorStop(1,    '#1c5c98');
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, TWO_PI);
         ctx.fillStyle = body;
         ctx.fill();
     }
 
-    // ── Vignette — spherical depth ──
+    // ── Very subtle vignette for depth ──
     const vig = ctx.createRadialGradient(
-        cx - r*0.14, cy - r*0.14, r*0.18,
+        cx - r*0.12, cy - r*0.12, r*0.20,
         cx, cy, r
     );
     vig.addColorStop(0,    'rgba(0,0,0,0)');
-    vig.addColorStop(0.58, 'rgba(0,0,0,0.07)');
-    vig.addColorStop(1,    'rgba(0,0,0,0.70)');
+    vig.addColorStop(0.60, 'rgba(0,0,0,0.04)');
+    vig.addColorStop(1,    'rgba(0,0,0,0.28)');
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, TWO_PI);
     ctx.fillStyle = vig;
@@ -484,16 +456,15 @@ function drawEarth(t = SIM.time) {
 
     ctx.restore();
 
-    // ── Thin atmosphere rim stroke ──
+    // ── Thin rim — very subtle on white background ──
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 1.006, 0, TWO_PI);
-    ctx.strokeStyle = 'rgba(120,200,255,0.48)';
-    ctx.lineWidth   = Math.max(1.5, r * 0.016);
+    ctx.arc(cx, cy, r, 0, TWO_PI);
+    ctx.strokeStyle = 'rgba(30,100,200,0.18)';
+    ctx.lineWidth   = Math.max(1, r * 0.010);
     ctx.stroke();
 }
 
 function drawScaleBar() {
-    // Find a "nice" km value whose bar width is close to 80 px
     const target = 80 / SIM.camera.scale;
     const exp    = Math.floor(Math.log10(Math.max(target, 1)));
     const pow    = Math.pow(10, exp);
@@ -505,7 +476,7 @@ function drawScaleBar() {
     const bx     = rx - bpx;
 
     ctx.save();
-    ctx.strokeStyle = 'rgba(150,170,210,0.46)';
+    ctx.strokeStyle = 'rgba(100,95,88,0.40)';
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
     ctx.moveTo(bx, by);    ctx.lineTo(rx, by);
@@ -516,19 +487,19 @@ function drawScaleBar() {
     const lbl = nice >= 1e6 ? `${(nice/1e6).toFixed(0)} M km`
               : nice >= 1e3 ? `${(nice/1e3).toFixed(nice>=1e4?0:1)}k km`
               :               `${nice.toFixed(0)} km`;
-    ctx.font      = '9px Courier New';
-    ctx.fillStyle = 'rgba(150,170,210,0.56)';
+    ctx.font      = '9px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(100,95,88,0.55)';
     ctx.textAlign = 'center';
     ctx.fillText(lbl, bx + bpx/2, by - 8);
     ctx.restore();
 }
 
 /**
- * drawArrow — world-coordinate endpoints; zoom-invariant arrowhead.
- * @param {number} lw  line width in px
- * @param {number} hs  arrowhead size in px
+ * drawArrow — world-coord endpoints, zoom-invariant arrowhead.
+ * @param {number} lw  line width px
+ * @param {number} hs  arrowhead size px
  */
-function drawArrow(x0w, y0w, x1w, y1w, color, lw = 1.5, hs = 10) {
+function drawArrow(x0w, y0w, x1w, y1w, color, lw = 2, hs = 11) {
     const [x0,y0] = w2c(x0w, y0w);
     const [x1,y1] = w2c(x1w, y1w);
     const dx = x1-x0, dy = y1-y0;
@@ -555,100 +526,88 @@ function roundRect(c, x, y, w, h, r) {
     c.beginPath();
     c.moveTo(x+r, y);   c.lineTo(x+w-r, y);   c.arcTo(x+w, y,   x+w, y+r,   r);
     c.lineTo(x+w, y+h-r);                       c.arcTo(x+w, y+h, x+w-r,y+h, r);
-    c.lineTo(x+r, y+h); c.lineTo(x+r, y+h);    c.arcTo(x,   y+h, x,   y+h-r, r);
+    c.lineTo(x+r, y+h);                          c.arcTo(x,   y+h, x,   y+h-r, r);
     c.lineTo(x,   y+r);                          c.arcTo(x,   y,   x+r, y,     r);
     c.closePath();
 }
 
 /* ═══════════════════════════════════════════════════
    ORBITAL MECHANICS HELPERS
-   Minimal set for now; extended in later spreads.
    ═══════════════════════════════════════════════════ */
-
-/** Position vector {x, y} km at true anomaly ν on a Keplerian orbit */
 function orbitPos(orbit, nu) {
     const { a, e, omega } = orbit;
     const p = a * (1 - e*e);
     const r = p / (1 + e * Math.cos(nu));
     return { x: r * Math.cos(nu + omega), y: r * Math.sin(nu + omega) };
 }
-
-/** Circular orbit speed km/s at radius r */
 function vcircular(r) { return Math.sqrt(MU / r); }
-
-/** Orbital period s for semi-major axis a */
-function period(a) { return TWO_PI * Math.sqrt(a*a*a / MU); }
+function period(a)    { return TWO_PI * Math.sqrt(a*a*a / MU); }
 
 /* ═══════════════════════════════════════════════════
    SPREAD 1 — "This is Earth"
    ═══════════════════════════════════════════════════ */
 
-/** Gravitational potential rings — faint, educational, decorative */
+/** Gravitational potential rings — very faint, light-themed */
 function drawGravityRings() {
     const [cx, cy] = w2c(0, 0);
     const er       = km2px(RE);
-    const radii    = [1.8, 3.2, 5.8, 10.0, 17.0];   // multiples of Earth radius
+    const radii    = [1.8, 3.2, 5.8, 10.0, 17.0];
 
     ctx.save();
-    ctx.setLineDash([3, 11]);
+    ctx.setLineDash([4, 12]);
     for (const f of radii) {
-        const alpha = (0.092 / (f * 0.58)).toFixed(3);
+        const alpha = Math.min(0.18, 0.10 / (f * 0.45));
         ctx.beginPath();
         ctx.arc(cx, cy, er * f, 0, TWO_PI);
-        ctx.strokeStyle = `rgba(50,110,240,${alpha})`;
-        ctx.lineWidth   = 0.8;
+        ctx.strokeStyle = `rgba(30,100,200,${alpha.toFixed(3)})`;
+        ctx.lineWidth   = 0.9;
         ctx.stroke();
     }
     ctx.setLineDash([]);
     ctx.restore();
 }
 
-/** "EARTH" label + radius readout, placed right of the globe */
+/** "EARTH" label with radius readout — dark text on white */
 function drawEarthLabel() {
     const [cx, cy] = w2c(0, 0);
     const r        = km2px(RE);
-    const lx       = cx + r + 13;
+    const lx       = cx + r + 14;
     const ly       = cy;
 
     ctx.save();
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font         = 'bold 11px Courier New';
-    ctx.fillStyle    = 'rgba(185,215,255,0.70)';
+    ctx.font         = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle    = 'rgba(30,28,24,0.55)';
     ctx.fillText('EARTH', lx, ly);
-    ctx.font      = '9px Courier New';
-    ctx.fillStyle = 'rgba(115,155,210,0.46)';
-    ctx.fillText(`R = ${RE.toLocaleString()} km`, lx, ly + 15);
+    ctx.font      = '10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(30,28,24,0.30)';
+    ctx.fillText(`R = ${RE.toLocaleString()} km`, lx, ly + 17);
     ctx.restore();
 }
 
 const SPREAD_EARTH = {
     id:       'earth',
-    title:    'THIS IS EARTH',
+    title:    'This is Earth',
     babyText: 'This is Earth.',
-    babySub:  '',   // clean on spread 1 — no sub-line
+    babySub:  '',
 
     resetCamera() {
-        // Earth fills ~22% of canvas height; centred at origin
         SIM.camera.x     = 0;
         SIM.camera.y     = 0;
-        SIM.camera.scale = (canvas.height * 0.22) / RE;
+        SIM.camera.scale = (canvas.height * 0.28) / RE;
     },
 
-    update(/* dt */) {
-        // Nothing orbits yet — SIM.time advances but scene is static
-    },
+    update(/* dt */) { /* nothing moves on spread 1 */ },
 
     render() {
         drawBg();
-        drawStars();
         drawGravityRings();
         drawEarth();
         drawEarthLabel();
         drawScaleBar();
     },
 
-    // No spread-specific interaction overrides for spread 1
     onMouseDown: null,
     onMouseMove: null,
     onKeyDown:   null,
@@ -665,7 +624,7 @@ const SPREAD_EARTH = {
                 We model the Earth–spacecraft system as a
                 <em>two-body problem</em>: one massive central body, one
                 infinitesimally small test mass. Earth's internal structure,
-                oblateness, atmosphere, and rotation are all ignored.
+                oblateness, and atmosphere are all ignored.
                 What remains is pure gravitational geometry.
             </p>
         </div>
@@ -703,11 +662,11 @@ const SPREAD_EARTH = {
             </p>
             <div class="eq">
                 <em>Two-body equation of motion</em>
-                r̈ = −( μ / r³ ) r
+                r̈ = −( μ / r³ ) · r
             </div>
             <p>
-                where <span class="hig">r</span> is the position vector from
-                Earth's centre and r = |r| is its magnitude.
+                where <strong>r</strong> is the position vector from
+                Earth's centre and r = |<strong>r</strong>| is its magnitude.
                 This single vector ODE governs all motion in this book —
                 every orbit, every transfer path, every rendezvous.
             </p>
@@ -719,13 +678,12 @@ const SPREAD_EARTH = {
                 We are looking down Earth's rotation axis, into the
                 <em>orbital plane</em>. Three-dimensional motion collapses
                 into 2-D, making position vectors, velocity vectors, and
-                transfer arcs easy to see, manipulate, and reason about.
+                transfer arcs easy to see, drag, and reason about.
             </p>
             <p class="note">
                 The faint concentric rings are gravitational equipotential
-                surfaces — each ring marks a constant gravitational potential
-                energy. Objects on the same ring share the same potential,
-                regardless of direction. Orbital altitude increases outward.
+                surfaces. Objects on the same ring share the same potential
+                energy regardless of direction. Altitude increases outward.
             </p>
         </div>
     `,
@@ -733,32 +691,29 @@ const SPREAD_EARTH = {
 
 /* ═══════════════════════════════════════════════════
    SPREADS REGISTRY
-   Add new spread objects here as the book grows.
    ═══════════════════════════════════════════════════ */
 const SPREADS = [
     SPREAD_EARTH,
-    // SPREAD_ORBIT,      // spread 2 — one satellite on a circular orbit
-    // SPREAD_VECTORS,    // spread 3 — r and v vectors
-    // SPREAD_TWO,        // spread 4 — two spacecraft
+    // SPREAD_ORBIT,    // spread 2
+    // SPREAD_VECTORS,  // spread 3
     // ...
 ];
 
 /* ═══════════════════════════════════════════════════
-   WARP HUD
-   Always drawn last, in the top-right of the canvas.
+   WARP HUD  — small indicator, dark text on white
    ═══════════════════════════════════════════════════ */
 function drawWarpHUD() {
     const label = SIM.playing
         ? SIM.warpLabels[SIM.warpIndex]
         : 'PAUSED';
     const col = !SIM.playing
-        ? 'rgba(255,74,106,0.80)'
+        ? 'rgba(180,40,60,0.75)'
         : SIM.warpIndex > 0
-            ? '#ffd700'
-            : 'rgba(0,212,255,0.65)';
+            ? 'rgba(140,110,0,0.80)'
+            : 'rgba(30,28,24,0.28)';
 
     ctx.save();
-    ctx.font         = 'bold 10px Courier New';
+    ctx.font         = 'bold 10px system-ui, sans-serif';
     ctx.fillStyle    = col;
     ctx.textAlign    = 'right';
     ctx.textBaseline = 'top';
@@ -772,26 +727,19 @@ function drawWarpHUD() {
 function goTo(index) {
     if (index < 0 || index >= SPREADS.length) return;
     SIM.spreadIndex = index;
-    SIM.hover       = {};    // clear hover state
-    SIM.drag        = {};    // clear drag state
+    SIM.hover       = {};
+    SIM.drag        = {};
 
     const sp = SPREADS[index];
-
-    // Left panel
     document.getElementById('baby-text').textContent = sp.babyText || '';
     document.getElementById('baby-sub').textContent  = sp.babySub  || '';
-
-    // Right panel
     document.getElementById('right-inner').innerHTML = sp.rightHTML || '';
     document.getElementById('right').scrollTop = 0;
-
-    // Bottom bar
     document.getElementById('bar-spread').textContent =
-        `SPREAD ${index + 1} OF ${SPREADS.length}`;
+        `Spread ${index + 1} of ${SPREADS.length}`;
     document.getElementById('btn-prev').disabled = (index === 0);
     document.getElementById('btn-next').disabled = (index === SPREADS.length - 1);
 
-    // Camera
     if (sp.resetCamera) sp.resetCamera();
 }
 
@@ -800,7 +748,7 @@ function goTo(index) {
    ═══════════════════════════════════════════════════ */
 function animLoop(ts) {
     if (SIM.playing && SIM.lastRaf !== null) {
-        const realDt = Math.min((ts - SIM.lastRaf) / 1000, 0.1);   // cap at 100ms
+        const realDt = Math.min((ts - SIM.lastRaf) / 1000, 0.1);
         const dt     = realDt * SIM.warpLevels[SIM.warpIndex];
         SIM.time    += dt;
         const sp = SPREADS[SIM.spreadIndex];
@@ -816,17 +764,13 @@ function animLoop(ts) {
    ═══════════════════════════════════════════════════ */
 function render() {
     const sp = SPREADS[SIM.spreadIndex];
-    if (sp && sp.render) {
-        sp.render();
-    } else {
-        // Fallback if a spread hasn't defined its render yet
-        drawBg(); drawStars(); drawEarth(); drawScaleBar();
-    }
-    drawWarpHUD();   // always on top
+    if (sp && sp.render) sp.render();
+    else { drawBg(); drawEarth(); drawScaleBar(); }
+    drawWarpHUD();
 }
 
 /* ═══════════════════════════════════════════════════
-   BOTTOM BAR SYNC
+   BAR SYNC
    ═══════════════════════════════════════════════════ */
 function syncBar() {
     document.getElementById('pbtn').textContent       = SIM.playing ? '⏸' : '▶';
@@ -836,36 +780,29 @@ function syncBar() {
 /* ═══════════════════════════════════════════════════
    EVENT HANDLERS
    ═══════════════════════════════════════════════════ */
-
-// ── Navigation ──
 document.getElementById('btn-prev').addEventListener('click', () => goTo(SIM.spreadIndex - 1));
 document.getElementById('btn-next').addEventListener('click', () => goTo(SIM.spreadIndex + 1));
 
-// ── Play / Pause ──
 document.getElementById('pbtn').addEventListener('click', () => {
     SIM.playing = !SIM.playing;
     syncBar();
 });
 
-// ── Scroll-wheel zoom (zoom toward cursor) ──
+// Zoom toward cursor
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const factor   = e.deltaY > 0 ? 0.87 : 1.14;
     const [wx, wy] = c2w(e.offsetX, e.offsetY);
     SIM.camera.scale *= factor;
-    // Keep the world point under the cursor stationary after zoom
     SIM.camera.x = wx - (e.offsetX - canvas.width  / 2) / SIM.camera.scale;
     SIM.camera.y = wy + (e.offsetY - canvas.height / 2) / SIM.camera.scale;
 }, { passive: false });
 
-// ── Mouse drag — pan (default) or spread-specific ──
 const wrap = document.getElementById('canvas-wrap');
 
 canvas.addEventListener('mousedown', (e) => {
     const sp = SPREADS[SIM.spreadIndex];
-    // Let the current spread handle it first; return true to consume.
     if (sp && sp.onMouseDown && sp.onMouseDown(e)) return;
-    // Default: begin pan
     SIM.pan = { active: true, cx0: e.offsetX, cy0: e.offsetY,
                 camX0: SIM.camera.x, camY0: SIM.camera.y };
     wrap.classList.add('panning');
@@ -882,16 +819,12 @@ canvas.addEventListener('mousemove', (e) => {
     }
 });
 
-function endPan() {
-    SIM.pan.active = false;
-    wrap.classList.remove('panning');
-}
+function endPan() { SIM.pan.active = false; wrap.classList.remove('panning'); }
 canvas.addEventListener('mouseup',    endPan);
 canvas.addEventListener('mouseleave', endPan);
 
-// ── Touch — single-finger pan + two-finger pinch zoom ──
+// Touch
 let _pinchDist = null;
-
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     if (e.touches.length === 1) {
@@ -922,39 +855,26 @@ canvas.addEventListener('touchmove', (e) => {
     }
 }, { passive: false });
 
-canvas.addEventListener('touchend', () => {
-    SIM.pan.active = false;
-    _pinchDist     = null;
-});
+canvas.addEventListener('touchend', () => { SIM.pan.active = false; _pinchDist = null; });
 
-// ── Keyboard — global controls; spread can intercept first ──
+// Keyboard
 document.addEventListener('keydown', (e) => {
     const sp = SPREADS[SIM.spreadIndex];
-    if (sp && sp.onKeyDown && sp.onKeyDown(e)) return;   // spread consumed it
-
+    if (sp && sp.onKeyDown && sp.onKeyDown(e)) return;
     switch (e.key) {
-        case ' ':
-        case 'Spacebar':
+        case ' ': case 'Spacebar':
             e.preventDefault();
-            SIM.playing = !SIM.playing;
-            syncBar();
-            break;
+            SIM.playing = !SIM.playing; syncBar(); break;
         case '.':
             SIM.warpIndex = Math.min(SIM.warpIndex + 1, SIM.warpLevels.length - 1);
-            syncBar();
-            break;
+            syncBar(); break;
         case ',':
             SIM.warpIndex = Math.max(SIM.warpIndex - 1, 0);
-            syncBar();
-            break;
+            syncBar(); break;
     }
 });
 
-// ── Resize ──
-window.addEventListener('resize', () => {
-    resizeCanvas();
-    render();
-});
+window.addEventListener('resize', () => { resizeCanvas(); render(); });
 
 /* ═══════════════════════════════════════════════════
    INIT
@@ -967,11 +887,8 @@ function init() {
     requestAnimationFrame(animLoop);
 }
 
-if (document.readyState === 'complete') {
-    init();
-} else {
-    window.addEventListener('load', init);
-}
+if (document.readyState === 'complete') init();
+else window.addEventListener('load', init);
 </script>
 </body>
 </html>
